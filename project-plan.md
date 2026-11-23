@@ -12,7 +12,7 @@ A garden-planning app that runs as a **web app**, a **Windows desktop app**, and
 | Storage | JSON files. Web: stored on the server, per browser session/client id. Desktop/Android: local app-data folder. Desktop users can upload and download (import/export) JSON files. |
 | Accounts/sync | None in v1. Import/export now; sync later. |
 | Plant data | Curated seed JSON (~50–100 plants: USDA zones, spacing, companions, antagonists), editable by the user. |
-| Icons | Bundled open-license SVGs in `garden-icons/`: **OpenMoji** (CC BY-SA 4.0; modified icons stay CC BY-SA 4.0) and **game-icons.net** (CC BY 3.0; Lorc, Delapouite & contributors). **Required:** credits shown on an About & Credits screen (`/about`, linked from the hamburger menu) and in `THIRD-PARTY-NOTICES.md`. |
+| Icons | Bundled open-license SVGs in `garden-icons/`: **OpenMoji** (CC BY-SA 4.0; modified icons stay CC BY-SA 4.0) and **game-icons.net** (CC BY 3.0; Lorc, Delapouite & contributors), plus **Icon Monks** (MIT, Design Monks; credit shown anyway, and `iconmonks-svg/LICENSE.md` must stay with the icons). **Required:** credits shown on an About & Credits screen (`/about`, linked from the hamburger menu) and in `THIRD-PARTY-NOTICES.md`. |
 | Platforms | Web, Windows (MAUI), Android (MAUI). Imperial units by default, metric optional. macOS/iOS/Linux are out of scope. |
 | Autosave | Debounced save after every change. |
 
