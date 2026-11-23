@@ -1,0 +1,379 @@
+@page "/plan/{Id}"
+@implements IAsyncDisposable
+@inject GardenSession Session
+@inject IJSRuntime JS
+
+<PageTitle>@(Plan?.Name ?? "Garden")</PageTitle>
+
+@if (!_loaded)
+{
+    <p>Loading…</p>
+}
+else if (Plan is null)
+{
+    <p>Plan not found. <a href="plans">Back to plans</a></p>
+}
+else
+{
+    var active = GridRules.ActiveSet(Plan);
+    <div class="editor">
+        <div class="toolbar">
+            <a href="plans" class="btn btn-sm btn-outline-secondary">← Plans</a>
+            <input class="form-control form-control-sm name" value="@Plan.Name" @onchange="e => Session.Mutate(p => p.Name = e.Value?.ToString() ?? p.Name)" />
+            <div class="btn-group btn-group-sm" role="group" aria-label="View">
+                <button class="btn @(_view == ViewMode.Soil ? "btn-success" : "btn-outline-success")" @onclick="() => _view = ViewMode.Soil">Soil</button>
+                <button class="btn @(_view == ViewMode.Plant ? "btn-success" : "btn-outline-success")" @onclick="() => _view = ViewMode.Plant">Plants</button>
+            </div>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Mode">
+                <button class="btn @(_mode == EditMode.Layout ? "btn-primary" : "btn-outline-primary")" @onclick="() => _mode = EditMode.Layout">Layout</button>
+                <button class="btn @(_mode == EditMode.Shape ? "btn-primary" : "btn-outline-primary")" @onclick="() => _mode = EditMode.Shape">Yard shape</button>
+            </div>
+            <span class="status">@Session.StatusText</span>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_message))
+        {
+            <div class="alert alert-warning py-1 mb-0">@_message</div>
+        }
+
+        <div class="workspace">
+            <div class="canvas-wrap">
+                <svg @ref="_svg" class="yard" viewBox="0 0 @Plan.GridWidth @Plan.GridHeight"
+                     @onpointerdown="OnBackgroundDown" @onpointermove="OnMove" @onpointerup="OnUp" @onpointercancel="OnUp">
+                    @for (var y = 0; y < Plan.GridHeight; y++)
+                    {
+                        for (var x = 0; x < Plan.GridWidth; x++)
+                        {
+                            <rect x="@x" y="@y" width="1" height="1" class="@(GridRules.IsActive(Plan, x, y, active) ? "cell" : "cell off")" />
+                        }
+                    }
+
+                    @foreach (var f in Plan.Features)
+                    {
+                        var feature = f;
+                        <g class="item @(_selectedId == feature.Id ? "selected" : "")" @onpointerdown="e => OnItemDown(e, feature.Id)" @onpointerdown:stopPropagation="true">
+                            <rect x="@feature.X" y="@feature.Y" width="@feature.Width" height="@feature.Height" class="paver" />
+                            <SvgText X="@(feature.X + feature.Width / 2.0)" Y="@(feature.Y + feature.Height / 2.0)" Class="label">@(feature.Icon ?? "▦")</SvgText>
+                        </g>
+                    }
+
+                    @foreach (var b in Plan.Beds)
+                    {
+                        var bed = b;
+                        <g class="item @(_selectedId == bed.Id ? "selected" : "")" @onpointerdown="e => OnItemDown(e, bed.Id)" @onpointerdown:stopPropagation="true">
+                            <rect x="@bed.X" y="@bed.Y" width="@bed.Width" height="@bed.Height" rx="@(bed.Type == BedType.Container ? 0.5 : 0.1)"
+                                  fill="@(_view == ViewMode.Soil ? SoilCatalog.ColorFor(bed.Soil) : "#7fb069")" class="bed" />
+                            @if (bed.Type == BedType.Row)
+                            {
+                                @for (var r = 1; r < bed.Height; r++)
+                                {
+                                    <line x1="@(bed.X + 0.2)" x2="@(bed.X + bed.Width - 0.2)" y1="@(bed.Y + r)" y2="@(bed.Y + r)" class="rowline" />
+                                }
+                            }
+                            else if (bed.Type == BedType.SquareFoot)
+                            {
+                                @for (var gx = 1; gx < bed.Width; gx++)
+                                {
+                                    <line x1="@(bed.X + gx)" x2="@(bed.X + gx)" y1="@bed.Y" y2="@(bed.Y + bed.Height)" class="sfline" />
+                                }
+                                @for (var gy = 1; gy < bed.Height; gy++)
+                                {
+                                    <line x1="@bed.X" x2="@(bed.X + bed.Width)" y1="@(bed.Y + gy)" y2="@(bed.Y + gy)" class="sfline" />
+                                }
+                            }
+                            <SvgText X="@(bed.X + bed.Width / 2.0)" Y="@(bed.Y + bed.Height / 2.0)" Class="label">@bed.Name</SvgText>
+                            @if (_view == ViewMode.Soil && !string.IsNullOrEmpty(bed.Soil))
+                            {
+                                <SvgText X="@(bed.X + bed.Width / 2.0)" Y="@(bed.Y + bed.Height / 2.0 + 0.8)" Class="sublabel">@bed.Soil</SvgText>
+                            }
+                        </g>
+                    }
+                </svg>
+                @if (_mode == EditMode.Shape)
+                {
+                    <p class="hint">Yard shape: tap or drag across cells to add or remove yard area. Cells under a bed can't be removed.</p>
+                }
+            </div>
+
+            <div class="props">
+                @if (_mode == EditMode.Shape || SelectedBed is null && SelectedFeature is null)
+                {
+                    <h6>Yard</h6>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label small">Width (ft)</label>
+                            <input type="number" class="form-control form-control-sm" min="1" max="200" value="@Plan.GridWidth" @onchange="e => ResizeYard(ParseInt(e, Plan.GridWidth), Plan.GridHeight)" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small">Length (ft)</label>
+                            <input type="number" class="form-control form-control-sm" min="1" max="200" value="@Plan.GridHeight" @onchange="e => ResizeYard(Plan.GridWidth, ParseInt(e, Plan.GridHeight))" />
+                        </div>
+                    </div>
+                    @if (_mode == EditMode.Layout)
+                    {
+                        <p class="hint mt-2">Select a bed or paver to edit it, drag to move it, or use the + button to add one.</p>
+                    }
+                }
+                @if (SelectedBed is { } sb && _mode == EditMode.Layout)
+                {
+                    <h6>Bed</h6>
+                    <label class="form-label small">Name</label>
+                    <input class="form-control form-control-sm mb-2" value="@sb.Name" @onchange="e => Session.Mutate(_ => sb.Name = e.Value?.ToString() ?? sb.Name)" />
+                    <label class="form-label small">Type</label>
+                    <select class="form-select form-select-sm mb-2" value="@sb.Type" @onchange="e => Session.Mutate(_ => sb.Type = Enum.Parse<BedType>(e.Value!.ToString()!))">
+                        <option value="@BedType.SquareFoot">Square foot</option>
+                        <option value="@BedType.Row">Row</option>
+                        <option value="@BedType.Container">Container</option>
+                    </select>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label small">Width (ft)</label>
+                            <input type="number" class="form-control form-control-sm" min="1" value="@sb.Width" @onchange="e => ResizeItem(sb.Id, ParseInt(e, sb.Width), sb.Height)" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small">Length (ft)</label>
+                            <input type="number" class="form-control form-control-sm" min="1" value="@sb.Height" @onchange="e => ResizeItem(sb.Id, sb.Width, ParseInt(e, sb.Height))" />
+                        </div>
+                    </div>
+                    <label class="form-label small">Soil <span class="text-muted">(optional)</span></label>
+                    <select class="form-select form-select-sm mb-2" value="@(sb.Soil ?? "")" @onchange="e => Session.Mutate(_ => sb.Soil = NullIfEmpty(e.Value))">
+                        <option value="">— not set —</option>
+                        @foreach (var s in SoilCatalog.Soils)
+                        {
+                            <option value="@s.Name">@s.Name</option>
+                        }
+                    </select>
+                    <label class="form-label small">Fertilizer <span class="text-muted">(optional)</span></label>
+                    <select class="form-select form-select-sm mb-2" value="@(sb.Fertilizer ?? "")" @onchange="e => Session.Mutate(_ => sb.Fertilizer = NullIfEmpty(e.Value))">
+                        <option value="">— not set —</option>
+                        @foreach (var f in SoilCatalog.Fertilizers)
+                        {
+                            <option value="@f">@f</option>
+                        }
+                    </select>
+                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteSelected()">Delete bed</button>
+                }
+                @if (SelectedFeature is { } sf && _mode == EditMode.Layout)
+                {
+                    <h6>Paver / feature</h6>
+                    <label class="form-label small">Kind</label>
+                    <input class="form-control form-control-sm mb-2" value="@sf.Kind" @onchange="e => Session.Mutate(_ => sf.Kind = e.Value?.ToString() ?? sf.Kind)" />
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label small">Width (ft)</label>
+                            <input type="number" class="form-control form-control-sm" min="1" value="@sf.Width" @onchange="e => ResizeItem(sf.Id, ParseInt(e, sf.Width), sf.Height)" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small">Length (ft)</label>
+                            <input type="number" class="form-control form-control-sm" min="1" value="@sf.Height" @onchange="e => ResizeItem(sf.Id, sf.Width, ParseInt(e, sf.Height))" />
+                        </div>
+                    </div>
+                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteSelected()">Delete</button>
+                }
+            </div>
+        </div>
+
+        @if (_mode == EditMode.Layout)
+        {
+            @if (_menuOpen)
+            {
+                <div class="fab-menu">
+                    <button class="btn btn-light" @onclick="() => Add(AddKind.SquareFoot)">▦ Square-foot bed</button>
+                    <button class="btn btn-light" @onclick="() => Add(AddKind.Row)">☰ Row bed</button>
+                    <button class="btn btn-light" @onclick="() => Add(AddKind.Container)">◯ Container</button>
+                    <button class="btn btn-light" @onclick="() => Add(AddKind.Paver)">▭ Paver / walkway</button>
+                </div>
+            }
+            <button class="fab" aria-label="Add" title="Add to garden" @onclick="() => _menuOpen = !_menuOpen">@(_menuOpen ? "×" : "+")</button>
+        }
+    </div>
+}
+
+@code {
+    private enum ViewMode { Soil, Plant }
+    private enum EditMode { Layout, Shape }
+    private enum AddKind { SquareFoot, Row, Container, Paver }
+
+    [Parameter] public string Id { get; set; } = "";
+
+    private GardenPlan? Plan => Session.Plan;
+    private Bed? SelectedBed => Plan?.Beds.FirstOrDefault(b => b.Id == _selectedId);
+    private GardenFeature? SelectedFeature => Plan?.Features.FirstOrDefault(f => f.Id == _selectedId);
+
+    private ElementReference _svg;
+    private IJSObjectReference? _module;
+    private bool _loaded;
+    private bool _menuOpen;
+    private string? _message;
+    private string? _selectedId;
+    private ViewMode _view = ViewMode.Soil;
+    private EditMode _mode = EditMode.Layout;
+
+    // pointer state
+    private double _left, _top, _scale = 1;
+    private string? _dragId;
+    private int _dragOffX, _dragOffY;
+    private bool _painting, _paintValue;
+    private (int X, int Y) _lastCell = (-1, -1);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loaded = false;
+        Session.Changed -= OnSessionChanged;
+        await Session.LoadAsync(Id);
+        Session.Changed += OnSessionChanged;
+        _loaded = true;
+    }
+
+    private void OnSessionChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private async Task RefreshRectAsync()
+    {
+        _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/ZeroCool.UI/grid.js");
+        var r = await _module.InvokeAsync<Rect>("getRect", _svg);
+        _left = r.Left; _top = r.Top;
+        _scale = Plan is null || Plan.GridWidth == 0 ? 1 : r.Width / Plan.GridWidth;
+    }
+
+    private (int X, int Y) CellAt(PointerEventArgs e) =>
+        ((int)Math.Floor((e.ClientX - _left) / _scale), (int)Math.Floor((e.ClientY - _top) / _scale));
+
+    private async Task OnItemDown(PointerEventArgs e, string id)
+    {
+        if (_mode != EditMode.Layout || Plan is null) return;
+        _menuOpen = false; _message = null;
+        await RefreshRectAsync();
+        await _module!.InvokeVoidAsync("capture", _svg, e.PointerId);
+        _selectedId = id;
+        var item = GridRules.Items(Plan).First(i => i.Id == id);
+        var cell = CellAt(e);
+        _dragId = id;
+        _dragOffX = cell.X - item.X;
+        _dragOffY = cell.Y - item.Y;
+    }
+
+    private async Task OnBackgroundDown(PointerEventArgs e)
+    {
+        if (Plan is null) return;
+        _menuOpen = false; _message = null;
+        await RefreshRectAsync();
+        if (_mode == EditMode.Shape)
+        {
+            await _module!.InvokeVoidAsync("capture", _svg, e.PointerId);
+            var cell = CellAt(e);
+            _paintValue = !GridRules.IsActive(Plan, cell.X, cell.Y);
+            _painting = true;
+            Paint(cell);
+        }
+        else
+        {
+            _selectedId = null;
+        }
+    }
+
+    private void OnMove(PointerEventArgs e)
+    {
+        if (Plan is null) return;
+        var cell = CellAt(e);
+        if (_painting) { Paint(cell); return; }
+        if (_dragId is null) return;
+        var item = GridRules.Items(Plan).First(i => i.Id == _dragId);
+        var nx = cell.X - _dragOffX;
+        var ny = cell.Y - _dragOffY;
+        if ((nx != item.X || ny != item.Y) && GridRules.CanPlace(Plan, _dragId, nx, ny, item.Width, item.Height))
+        {
+            var id = _dragId;
+            Session.Mutate(p =>
+            {
+                var bed = p.Beds.FirstOrDefault(b => b.Id == id);
+                if (bed is not null) { bed.X = nx; bed.Y = ny; return; }
+                var f = p.Features.FirstOrDefault(x => x.Id == id);
+                if (f is not null) { f.X = nx; f.Y = ny; }
+            });
+        }
+    }
+
+    private void OnUp(PointerEventArgs e)
+    {
+        _dragId = null;
+        _painting = false;
+        _lastCell = (-1, -1);
+    }
+
+    private void Paint(( int X, int Y) cell)
+    {
+        if (cell == _lastCell || Plan is null) return;
+        _lastCell = cell;
+        if (!GridRules.InBounds(Plan, cell.X, cell.Y)) return;
+        if (GridRules.IsActive(Plan, cell.X, cell.Y) == _paintValue) return;
+        var ok = true;
+        Session.Mutate(p => ok = GridRules.SetActive(p, cell.X, cell.Y, _paintValue));
+        _message = ok ? null : "That cell is under a bed or paver; move it first.";
+    }
+
+    private void Add(AddKind kind)
+    {
+        if (Plan is null) return;
+        var (w, h) = kind switch { AddKind.SquareFoot => (4, 4), AddKind.Row => (4, 8), AddKind.Container => (2, 2), _ => (1, 1) };
+        var spot = GridRules.FindFreeSpot(Plan, w, h);
+        _menuOpen = false;
+        if (spot is null) { _message = "No free space for that. Enlarge the yard or move things around."; return; }
+        _message = null;
+        string newId = Guid.NewGuid().ToString("N");
+        Session.Mutate(p =>
+        {
+            if (kind == AddKind.Paver)
+                p.Features.Add(new GardenFeature { Id = newId, Kind = "paver", X = spot.Value.X, Y = spot.Value.Y, Width = w, Height = h });
+            else
+                p.Beds.Add(new Bed
+                {
+                    Id = newId, Name = $"Bed {p.Beds.Count + 1}", X = spot.Value.X, Y = spot.Value.Y, Width = w, Height = h,
+                    Type = kind switch { AddKind.Row => BedType.Row, AddKind.Container => BedType.Container, _ => BedType.SquareFoot }
+                });
+        });
+        _selectedId = newId;
+    }
+
+    private void ResizeItem(string id, int w, int h)
+    {
+        if (Plan is null) return;
+        var item = GridRules.Items(Plan).First(i => i.Id == id);
+        if (!GridRules.CanPlace(Plan, id, item.X, item.Y, w, h)) { _message = "That size doesn't fit there."; return; }
+        _message = null;
+        Session.Mutate(p =>
+        {
+            var bed = p.Beds.FirstOrDefault(b => b.Id == id);
+            if (bed is not null) { bed.Width = w; bed.Height = h; return; }
+            var f = p.Features.FirstOrDefault(x => x.Id == id);
+            if (f is not null) { f.Width = w; f.Height = h; }
+        });
+    }
+
+    private void ResizeYard(int w, int h)
+    {
+        if (Plan is null) return;
+        var dropped = Plan.Beds.Count(b => b.X + b.Width > w || b.Y + b.Height > h) + Plan.Features.Count(f => f.X + f.Width > w || f.Y + f.Height > h);
+        _message = dropped > 0 ? $"{dropped} item(s) outside the new yard size were removed." : null;
+        Session.Mutate(p => GridRules.Resize(p, w, h));
+    }
+
+    private void DeleteSelected()
+    {
+        var id = _selectedId;
+        Session.Mutate(p => { p.Beds.RemoveAll(b => b.Id == id); p.Features.RemoveAll(f => f.Id == id); });
+        _selectedId = null;
+    }
+
+    private static int ParseInt(ChangeEventArgs e, int fallback) => int.TryParse(e.Value?.ToString(), out var v) && v > 0 ? v : fallback;
+    private static string? NullIfEmpty(object? v) => string.IsNullOrEmpty(v?.ToString()) ? null : v!.ToString();
+
+    private record Rect(double Left, double Top, double Width, double Height);
+
+    public async ValueTask DisposeAsync()
+    {
+        Session.Changed -= OnSessionChanged;
+        await Session.FlushAsync();
+        if (_module is not null) { try { await _module.DisposeAsync(); } catch { } }
+    }
+}
+

@@ -1,0 +1,32 @@
+.editor { display: flex; flex-direction: column; gap: .5rem; }
+.toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.toolbar .name { max-width: 14rem; }
+.status { margin-left: auto; font-size: .8rem; color: #666; }
+.workspace { display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-start; }
+.canvas-wrap { flex: 1 1 420px; min-width: 0; max-width: 760px; }
+.props { flex: 0 0 260px; }
+.hint { font-size: .85rem; color: #666; margin: .5rem 0 0; }
+
+.yard { width: 100%; height: auto; display: block; touch-action: none; user-select: none; -webkit-user-select: none;
+        background: #f4f4f4; border: 1px solid #ccc; }
+.cell { fill: #cfe8c0; stroke: #b5d3a5; stroke-width: .03; }
+.cell.off { fill: #ececec; stroke: #e0e0e0; }
+.item { cursor: grab; }
+.bed { stroke: #3b2a1a; stroke-width: .06; }
+.paver { fill: #b0b0b0; stroke: #808080; stroke-width: .05; }
+.selected .bed, .selected .paver { stroke: #0d6efd; stroke-width: .15; }
+.rowline { stroke: rgba(255,255,255,.55); stroke-width: .08; stroke-dasharray: .3 .2; pointer-events: none; }
+.sfline { stroke: rgba(255,255,255,.4); stroke-width: .04; pointer-events: none; }
+.label { font-size: .55px; fill: #fff; text-anchor: middle; dominant-baseline: middle; pointer-events: none; paint-order: stroke; stroke: rgba(0,0,0,.45); stroke-width: .08px; }
+.sublabel { font-size: .4px; fill: #fff; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+
+.fab { position: fixed; right: 1.25rem; bottom: 1.25rem; width: 3.5rem; height: 3.5rem; border-radius: 50%; border: 0;
+       background: #198754; color: #fff; font-size: 2rem; line-height: 1; box-shadow: 0 2px 8px rgba(0,0,0,.3); z-index: 20; }
+.fab-menu { position: fixed; right: 1.25rem; bottom: 5.5rem; display: flex; flex-direction: column; gap: .35rem; z-index: 20; align-items: flex-end; }
+.fab-menu .btn { box-shadow: 0 1px 6px rgba(0,0,0,.25); }
+
+@media (max-width: 640px) {
+    .props { flex: 1 1 100%; }
+    .toolbar .name { max-width: 100%; flex: 1 1 100%; }
+}
+

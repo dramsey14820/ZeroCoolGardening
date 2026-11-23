@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ZeroCool.Core\ZeroCool.Core.csproj" />
+    <ProjectReference Include="..\ZeroCool.Data\ZeroCool.Data.csproj" />
   </ItemGroup>
 
 </Project>

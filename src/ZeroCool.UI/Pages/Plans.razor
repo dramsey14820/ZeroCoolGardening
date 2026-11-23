@@ -1,0 +1,87 @@
+@page "/plans"
+@inject PlanRepository Plans
+@inject NavigationManager Nav
+
+<PageTitle>My Garden Plans</PageTitle>
+<h1>My Garden Plans</h1>
+
+<div class="card p-3 mb-3">
+    <h5>New garden (yard)</h5>
+    <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-5">
+            <label class="form-label">Name</label>
+            <input class="form-control" @bind="_name" @bind:event="oninput" />
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label">Width (ft)</label>
+            <input type="number" class="form-control" min="1" max="200" @bind="_width" />
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label">Length (ft)</label>
+            <input type="number" class="form-control" min="1" max="200" @bind="_height" />
+        </div>
+        <div class="col-12 col-md-3">
+            <button class="btn btn-success w-100" @onclick="CreateAsync" disabled="@string.IsNullOrWhiteSpace(_name)">Create</button>
+        </div>
+    </div>
+</div>
+
+@if (_plans is null)
+{
+    <p>Loading…</p>
+}
+else if (_plans.Count == 0)
+{
+    <p>No garden plans yet. Create one above.</p>
+}
+else
+{
+    <ul class="list-group">
+        @foreach (var p in _plans)
+        {
+            var plan = p;
+            <li class="list-group-item d-flex flex-wrap gap-2 justify-content-between align-items-center">
+                <div>
+                    <strong>@plan.Name</strong>
+                    <small class="text-muted ms-2">@plan.GridWidth × @plan.GridHeight ft · @plan.Beds.Count bed(s)</small>
+                </div>
+                <div class="d-flex gap-2">
+                    <a class="btn btn-sm btn-primary" href="plan/@plan.Id">Open</a>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => DuplicateAsync(plan)">Duplicate</button>
+                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAsync(plan)">Delete</button>
+                </div>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private List<GardenPlan>? _plans;
+    private string _name = "My Garden";
+    private int _width = 20;
+    private int _height = 20;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync() => _plans = (await Plans.ListAsync(templates: false)).ToList();
+
+    private async Task CreateAsync()
+    {
+        var plan = new GardenPlan { Name = _name.Trim(), GridWidth = Math.Clamp(_width, 1, 200), GridHeight = Math.Clamp(_height, 1, 200) };
+        await Plans.SaveAsync(plan);
+        Nav.NavigateTo($"plan/{plan.Id}");
+    }
+
+    private async Task DuplicateAsync(GardenPlan plan)
+    {
+        await Plans.CloneAsync(plan, asTemplate: false, plan.Name + " (copy)");
+        await ReloadAsync();
+    }
+
+    private async Task DeleteAsync(GardenPlan plan)
+    {
+        await Plans.DeleteAsync(plan.Id, plan.IsTemplate);
+        await ReloadAsync();
+    }
+}
+

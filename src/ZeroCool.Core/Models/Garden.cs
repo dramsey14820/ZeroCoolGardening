@@ -67,7 +67,7 @@ public class GardenPlan
     public bool IsTemplate { get; set; }
     public int GridWidth { get; set; } = 20;
     public int GridHeight { get; set; } = 20;
-    /// <summary>Cells that are part of the yard. Null/empty = the full rectangle.</summary>
+    /// <summary>Cells that are part of the yard. Null = the full rectangle; an empty list = no active cells.</summary>
     public List<GridCell>? ActiveCells { get; set; }
     public List<Bed> Beds { get; set; } = new();
     public List<GardenFeature> Features { get; set; } = new();

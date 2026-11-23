@@ -1,0 +1,9 @@
+<text x="@X" y="@Y" class="@Class">@ChildContent</text>
+
+@code {
+    [Parameter] public double X { get; set; }
+    [Parameter] public double Y { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}
+
