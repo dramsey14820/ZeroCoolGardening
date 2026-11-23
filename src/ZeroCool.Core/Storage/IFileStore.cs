@@ -8,3 +8,4 @@ public interface IFileStore
     Task<bool> DeleteAsync(string path, CancellationToken ct = default);
     Task<IReadOnlyList<string>> ListAsync(string folder, CancellationToken ct = default);
 }
+

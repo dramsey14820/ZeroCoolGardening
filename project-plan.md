@@ -12,7 +12,7 @@ A garden-planning app that runs as a **web app**, a **Windows desktop app**, and
 | Storage | JSON files. Web: stored on the server, per browser session/client id. Desktop/Android: local app-data folder. Desktop users can upload and download (import/export) JSON files. |
 | Accounts/sync | None in v1. Import/export now; sync later. |
 | Plant data | Curated seed JSON (~50–100 plants: USDA zones, spacing, companions, antagonists), editable by the user. |
-| Icons | Bundled emoji or open-license SVG icons. |
+| Icons | Bundled open-license SVGs in `garden-icons/`: **OpenMoji** (CC BY-SA 4.0; modified icons stay CC BY-SA 4.0) and **game-icons.net** (CC BY 3.0; Lorc, Delapouite & contributors). **Required:** credits shown on an About & Credits screen (`/about`, linked from the hamburger menu) and in `THIRD-PARTY-NOTICES.md`. |
 | Platforms | Web, Windows (MAUI), Android (MAUI). Imperial units by default, metric optional. macOS/iOS/Linux are out of scope. |
 | Autosave | Debounced save after every change. |
 
@@ -122,7 +122,7 @@ Files: `settings.json`, `plants.json` (seed plus user overrides), `plans/{id}.js
 1b. Planting timing rules (start indoors / sow / transplant / harvest, weeks relative to frost) per plant and variety.
 2. USDA zone data (frost dates, planting windows). Offline zone → frost-date table. Provide a ZIP lookup later if wanted.
 3. Soil and fertilizer type list (loam, clay, sandy, raised-bed mix; N-P-K, compost, etc.).
-4. Choose the icon set (emoji vs open-license SVG) and check licenses.
+4. Icon set chosen: OpenMoji + game-icons.net (licenses confirmed; attribution required, see Section 2). Keep the About & Credits screen up to date with any new icon source.
 
 ## 8. Milestones
 | # | Milestone | Deliverables |

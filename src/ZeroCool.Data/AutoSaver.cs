@@ -58,3 +58,4 @@ public sealed class AutoSaver<T> : IAsyncDisposable where T : class
 
     public async ValueTask DisposeAsync() => await FlushAsync();
 }
+

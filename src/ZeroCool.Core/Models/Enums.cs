@@ -14,3 +14,4 @@ public enum CalendarEventType { StartIndoors, DirectSow, Transplant, Harvest }
 
 /// <summary>Anchor for a calendar rule offset.</summary>
 public enum FrostAnchor { LastSpringFrost, FirstFallFrost }
+

@@ -144,3 +144,4 @@ public sealed class PlantCatalogRepository(IFileStore store)
         await SaveUserAsync(user, ct);
     }
 }
+

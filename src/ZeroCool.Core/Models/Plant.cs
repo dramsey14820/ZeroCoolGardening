@@ -62,3 +62,4 @@ public class Plant : PlantInfoBase
     public List<string> Antagonists { get; set; } = new();
     public List<Variety> Varieties { get; set; } = new();
 }
+

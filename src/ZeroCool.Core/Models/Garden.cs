@@ -82,3 +82,4 @@ public class UserCatalog
     /// <summary>Ids of built-in plants the user deleted (hidden).</summary>
     public List<string> HiddenPlantIds { get; set; } = new();
 }
+
