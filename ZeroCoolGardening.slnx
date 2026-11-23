@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ZeroCool.Core/ZeroCool.Core.csproj" />
+    <Project Path="src/ZeroCool.Data/ZeroCool.Data.csproj" />
+    <Project Path="src/ZeroCool.Maui/ZeroCool.Maui.csproj" />
+    <Project Path="src/ZeroCool.UI/ZeroCool.UI.csproj" />
+    <Project Path="src/ZeroCool.Web/ZeroCool.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ZeroCool.Tests/ZeroCool.Tests.csproj" />
+  </Folder>
+</Solution>
