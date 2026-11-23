@@ -1,0 +1,72 @@
+[
+  {
+    "id": "tomato", "name": "Tomato", "icon": "🍅", "category": "Vegetable", "edible": true, "edibleParts": "Ripe fruit",
+    "description": "Warm-season fruiting vegetable. Needs staking or caging.",
+    "daysToMaturity": 75, "sun": "Full sun (6-8+ hours)", "water": "Deep, regular watering", "zones": [3,4,5,6,7,8,9,10,11],
+    "spacing": { "inRowInches": 24, "betweenRowsInches": 36, "plantsPerSquareFoot": 1, "cellSpanWidth": 2, "cellSpanHeight": 2 },
+    "preferredSoils": ["Loam", "Raised-bed mix"],
+    "companions": ["basil", "carrot", "marigold"], "antagonists": [],
+    "healthBenefits": ["Source of vitamin C and potassium", "Contains lycopene, an antioxidant"],
+    "warnings": [
+      { "type": "ToxicToPets", "severity": "Caution", "text": "Leaves, stems and green fruit contain tomatine; keep pets from eating the plant." }
+    ],
+    "calendarRules": [
+      { "event": "StartIndoors", "anchor": "LastSpringFrost", "weeksOffsetStart": -8, "weeksOffsetEnd": -6 },
+      { "event": "Transplant", "anchor": "LastSpringFrost", "weeksOffsetStart": 1, "weeksOffsetEnd": 2 }
+    ],
+    "sources": ["STARTER DATA - to be verified against extension-service sources (M-research task)"],
+    "varieties": [
+      { "id": "tomato-roma", "name": "Roma", "description": "Determinate paste tomato.", "daysToMaturity": 78 },
+      { "id": "tomato-cherokee-purple", "name": "Cherokee Purple", "description": "Indeterminate heirloom slicer.", "daysToMaturity": 85 }
+    ]
+  },
+  {
+    "id": "basil", "name": "Basil", "icon": "🌿", "category": "Herb", "edible": true, "edibleParts": "Leaves",
+    "daysToMaturity": 60, "sun": "Full sun", "water": "Regular; keep evenly moist", "zones": [3,4,5,6,7,8,9,10,11],
+    "spacing": { "inRowInches": 12, "betweenRowsInches": 18, "plantsPerSquareFoot": 1 },
+    "preferredSoils": ["Loam"], "companions": ["tomato"], "antagonists": [],
+    "healthBenefits": ["Rich in vitamin K", "Contains aromatic antioxidant compounds"],
+    "warnings": [],
+    "calendarRules": [
+      { "event": "StartIndoors", "anchor": "LastSpringFrost", "weeksOffsetStart": -6, "weeksOffsetEnd": -4 },
+      { "event": "Transplant", "anchor": "LastSpringFrost", "weeksOffsetStart": 1, "weeksOffsetEnd": 2 }
+    ],
+    "sources": ["STARTER DATA - to be verified"],
+    "varieties": [ { "id": "basil-genovese", "name": "Genovese" }, { "id": "basil-thai", "name": "Thai" } ]
+  },
+  {
+    "id": "carrot", "name": "Carrot", "icon": "🥕", "category": "Vegetable", "edible": true, "edibleParts": "Root",
+    "daysToMaturity": 70, "sun": "Full sun to part shade", "water": "Even moisture", "zones": [3,4,5,6,7,8,9,10],
+    "spacing": { "inRowInches": 3, "betweenRowsInches": 12, "plantsPerSquareFoot": 16 },
+    "preferredSoils": ["Sandy loam", "Raised-bed mix"], "companions": ["tomato"], "antagonists": ["dill"],
+    "healthBenefits": ["High in beta-carotene (vitamin A precursor)"], "warnings": [],
+    "calendarRules": [
+      { "event": "DirectSow", "anchor": "LastSpringFrost", "weeksOffsetStart": -3, "weeksOffsetEnd": 2, "successionIntervalWeeks": 3 }
+    ],
+    "sources": ["STARTER DATA - to be verified"],
+    "varieties": [ { "id": "carrot-nantes", "name": "Nantes", "daysToMaturity": 68 } ]
+  },
+  {
+    "id": "dill", "name": "Dill", "icon": "🌿", "category": "Herb", "edible": true, "edibleParts": "Leaves and seeds",
+    "daysToMaturity": 50, "sun": "Full sun", "zones": [3,4,5,6,7,8,9,10,11],
+    "spacing": { "inRowInches": 12, "betweenRowsInches": 18, "plantsPerSquareFoot": 1 },
+    "preferredSoils": ["Loam"], "companions": [], "antagonists": ["carrot", "tomato"],
+    "healthBenefits": [], "warnings": [],
+    "calendarRules": [ { "event": "DirectSow", "anchor": "LastSpringFrost", "weeksOffsetStart": -2, "weeksOffsetEnd": 4 } ],
+    "sources": ["STARTER DATA - to be verified"], "varieties": []
+  },
+  {
+    "id": "marigold", "name": "Marigold", "icon": "🌼", "category": "Flower", "edible": false,
+    "daysToMaturity": 55, "sun": "Full sun", "zones": [2,3,4,5,6,7,8,9,10,11],
+    "spacing": { "inRowInches": 8, "betweenRowsInches": 12, "plantsPerSquareFoot": 1 },
+    "preferredSoils": ["Loam", "Sandy loam"], "companions": ["tomato"], "antagonists": [],
+    "healthBenefits": [],
+    "warnings": [ { "type": "SkinIrritant", "severity": "Info", "text": "Sap may irritate sensitive skin." } ],
+    "calendarRules": [
+      { "event": "StartIndoors", "anchor": "LastSpringFrost", "weeksOffsetStart": -6, "weeksOffsetEnd": -4 },
+      { "event": "DirectSow", "anchor": "LastSpringFrost", "weeksOffsetStart": 0, "weeksOffsetEnd": 2 }
+    ],
+    "sources": ["STARTER DATA - to be verified"],
+    "varieties": [ { "id": "marigold-french", "name": "French" } ]
+  }
+]
