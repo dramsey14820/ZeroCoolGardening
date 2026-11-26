@@ -11,12 +11,12 @@
 .pot-rim { fill: #c26d43; stroke: #8c4727; stroke-width: .18; }
 .bag-rim { fill: #3f464d; stroke: #222; stroke-width: .18; stroke-dasharray: .4 .2; }
 .pot-soil { stroke: rgba(0, 0, 0, .2); stroke-width: .08; }
-.pot-emoji { font-size: 1.4px; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.container-svg ::deep .pot-emoji { font-size: 1.4px; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
 .pot-pill { fill: rgba(25, 135, 84, .92); pointer-events: none; }
-.pot-label { font-size: .46px; fill: #fff; text-anchor: middle; dominant-baseline: middle; font-weight: 600; pointer-events: none; }
-.pot-empty { font-size: .5px; fill: #fff; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
-.pot-empty-sub { font-size: .36px; fill: rgba(255, 255, 255, .82); text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
-.soil-banner { font-size: .6px; fill: #fff; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: .08px; pointer-events: none; }
-.soil-sub { font-size: .4px; fill: #fff; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: .05px; pointer-events: none; }
+.container-svg ::deep .pot-label { font-size: .46px; fill: #fff; text-anchor: middle; dominant-baseline: middle; font-weight: 600; pointer-events: none; }
+.container-svg ::deep .pot-empty { font-size: .5px; fill: #fff; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.container-svg ::deep .pot-empty-sub { font-size: .36px; fill: rgba(255, 255, 255, .82); text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.container-svg ::deep .soil-banner { font-size: .6px; fill: #fff; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: .08px; pointer-events: none; }
+.container-svg ::deep .soil-sub { font-size: .4px; fill: #fff; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: .05px; pointer-events: none; }
 .hint { font-size: .82rem; color: #666; margin: .45rem 0 0; }
 

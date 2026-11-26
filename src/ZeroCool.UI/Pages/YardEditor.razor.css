@@ -17,8 +17,8 @@
 .selected .bed, .selected .paver { stroke: #0d6efd; stroke-width: .15; }
 .rowline { stroke: rgba(255,255,255,.55); stroke-width: .08; stroke-dasharray: .3 .2; pointer-events: none; }
 .sfline { stroke: rgba(255,255,255,.4); stroke-width: .04; pointer-events: none; }
-.label { font-size: .55px; fill: #fff; text-anchor: middle; dominant-baseline: middle; pointer-events: none; paint-order: stroke; stroke: rgba(0,0,0,.45); stroke-width: .08px; }
-.sublabel { font-size: .4px; fill: #fff; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.yard ::deep .label { font-size: .55px; fill: #fff; text-anchor: middle; dominant-baseline: middle; pointer-events: none; paint-order: stroke; stroke: rgba(0,0,0,.45); stroke-width: .08px; }
+.yard ::deep .sublabel { font-size: .4px; fill: #fff; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
 
 .fab { position: fixed; right: 1.25rem; bottom: 1.25rem; width: 3.5rem; height: 3.5rem; border-radius: 50%; border: 0;
        background: #198754; color: #fff; font-size: 2rem; line-height: 1; box-shadow: 0 2px 8px rgba(0,0,0,.3); z-index: 20; }

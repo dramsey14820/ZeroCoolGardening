@@ -32,20 +32,20 @@
 .planting.dragging { opacity: .82; cursor: grabbing; }
 .plant-tile { fill: #f7fbf4; stroke: #4b8b3b; stroke-width: .03; }
 .plant-tile.multi { fill: #edf7e8; stroke: #2f6f26; stroke-width: .045; }
-.plant-emoji { font-size: .45px; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
-.sub-emoji { font-size: .18px; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
-.plant-label { font-size: .14px; fill: #223; text-anchor: middle; dominant-baseline: middle; font-weight: 600; pointer-events: none; }
+.bed-svg ::deep .plant-emoji { font-size: .45px; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.bed-svg ::deep .sub-emoji { font-size: .18px; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.bed-svg ::deep .plant-label { font-size: .14px; fill: #223; text-anchor: middle; dominant-baseline: middle; font-weight: 600; pointer-events: none; }
 .count-pill { fill: #198754; pointer-events: none; }
-.count-text { font-size: .12px; fill: #fff; text-anchor: middle; dominant-baseline: middle; font-weight: 600; pointer-events: none; }
+.bed-svg ::deep .count-text { font-size: .12px; fill: #fff; text-anchor: middle; dominant-baseline: middle; font-weight: 600; pointer-events: none; }
 .warn-dot { fill: #f59f00; stroke: #fff; stroke-width: .02; pointer-events: none; }
-.warn-bang { font-size: .13px; fill: #fff; text-anchor: middle; dominant-baseline: middle; font-weight: 700; pointer-events: none; }
+.bed-svg ::deep .warn-bang { font-size: .13px; fill: #fff; text-anchor: middle; dominant-baseline: middle; font-weight: 700; pointer-events: none; }
 .adj-halo { stroke: rgba(255, 255, 255, .85); stroke-width: .17; stroke-linecap: round; pointer-events: none; }
 .adj-edge { stroke-width: .11; stroke-linecap: round; cursor: help; }
 .adj-edge.good { stroke: #198754; }
 .adj-edge.bad { stroke: #dc3545; }
 .adj-legend { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
-.soil-banner { font-size: .35px; fill: #fff; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: .05px; pointer-events: none; }
-.soil-sub { font-size: .2px; fill: #fff; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: .03px; pointer-events: none; }
+.bed-svg ::deep .soil-banner { font-size: .35px; fill: #fff; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: .05px; pointer-events: none; }
+.bed-svg ::deep .soil-sub { font-size: .2px; fill: #fff; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: .03px; pointer-events: none; }
 .hint { font-size: .82rem; color: #666; margin: .45rem 0 0; }
 
 .fab {
