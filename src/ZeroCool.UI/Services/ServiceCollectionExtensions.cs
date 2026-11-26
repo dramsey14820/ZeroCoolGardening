@@ -11,6 +11,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<PlanRepository>();
         services.AddScoped<SettingsRepository>();
         services.AddScoped<PlantCatalogRepository>();
+        services.AddScoped<TransferService>();
         services.AddScoped<GardenSession>();
         return services;
     }

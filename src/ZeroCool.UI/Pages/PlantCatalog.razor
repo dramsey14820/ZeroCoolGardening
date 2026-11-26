@@ -1,0 +1,495 @@
+@page "/plants"
+@page "/plants/{EditId}"
+@inject PlantCatalogRepository CatalogRepo
+@inject TransferService Transfer
+@inject GardenSession Session
+
+<PageTitle>Plants &amp; Varieties</PageTitle>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <h1 class="mb-0">Plants &amp; Varieties</h1>
+    <button class="btn btn-success btn-sm" @onclick="StartNew">+ Add New Plant</button>
+</div>
+
+@if (!string.IsNullOrEmpty(_notice))
+{
+    <div class="alert alert-info py-2 d-flex justify-content-between align-items-center">
+        <span>@_notice</span>
+        <button class="btn-close btn-sm" @onclick="() => _notice = null"></button>
+    </div>
+}
+
+<div class="catalog-layout">
+    <div class="catalog-list">
+        <input class="form-control form-control-sm mb-2" placeholder="Search plants or varieties…"
+               @bind="_search" @bind:event="oninput" />
+
+        <div class="list-group mb-3">
+            @foreach (var p in FilteredPlants)
+            {
+                var plant = p;
+                var isSelected = _editing?.Id == plant.Id;
+                var isSeed = _seedIds.Contains(plant.Id);
+                var isOverridden = isSeed && _userOverrideIds.Contains(plant.Id);
+                <button type="button"
+                        class="list-group-item list-group-item-action d-flex align-items-center gap-2 @(isSelected ? "active" : "")"
+                        @onclick="() => SelectPlant(plant)">
+                    <PlantIcon Icon="@plant.Icon" FallbackKey="@plant.Id" Alt="@plant.Name" Size="24" />
+                    <div class="flex-grow-1 text-start">
+                        <div class="fw-semibold">@plant.Name</div>
+                        <div class="small @(isSelected ? "text-light" : "text-muted")">
+                            @plant.Category · @plant.Varieties.Count @(plant.Varieties.Count == 1 ? "variety" : "varieties")
+                        </div>
+                    </div>
+                    @if (!isSeed)
+                    {
+                        <span class="badge bg-primary">Custom</span>
+                    }
+                    else if (isOverridden)
+                    {
+                        <span class="badge bg-info text-dark">Edited</span>
+                    }
+                </button>
+            }
+        </div>
+
+        @if (_hiddenSeedPlants.Count > 0)
+        {
+            <div class="card p-2">
+                <div class="small fw-semibold mb-1 text-muted">Hidden built-in plants</div>
+                @foreach (var h in _hiddenSeedPlants)
+                {
+                    var hidden = h;
+                    <div class="d-flex justify-content-between align-items-center py-1">
+                        <span class="small">@hidden.Name</span>
+                        <button class="btn btn-xs btn-outline-success" @onclick="() => RestoreHiddenAsync(hidden.Id)">Restore</button>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="catalog-editor">
+        @if (_editing is null)
+        {
+            <div class="card p-4 text-muted text-center">
+                Select a plant on the left to edit it and its varieties, or click <strong>+ Add New Plant</strong>.
+            </div>
+        }
+        else
+        {
+            var isBuiltIn = _seedIds.Contains(_editing.Id);
+            <div class="card p-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <PlantIcon Icon="@_editing.Icon" FallbackKey="@_editing.Id" Alt="@_editing.Name" Size="32" />
+                        <h5 class="mb-0">@(_isNew ? "New Plant" : _editing.Name)</h5>
+                    </div>
+                    <div class="d-flex flex-wrap gap-1">
+                        <button class="btn btn-sm btn-success" @onclick="SaveAsync" disabled="@string.IsNullOrWhiteSpace(_editing.Name)">Save</button>
+                        @if (isBuiltIn && !_isNew)
+                        {
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="ResetToDefaultAsync">Reset to default</button>
+                        }
+                        @if (!_isNew)
+                        {
+                            <button class="btn btn-sm btn-outline-danger" @onclick="RequestDeleteAsync">Delete</button>
+                        }
+                    </div>
+                </div>
+
+                @if (_deleteConfirmUsageCount > 0)
+                {
+                    <div class="alert alert-warning p-2 mb-3">
+                        <div class="small fw-semibold mb-2">
+                            "@_editing.Name" is currently placed @_deleteConfirmUsageCount time(s) in your plans. What should happen to those placements?
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteAsync(removeUsages: true)">Remove from plans &amp; delete</button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => ConfirmDeleteAsync(removeUsages: false)">Keep placements &amp; delete</button>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => _deleteConfirmUsageCount = 0">Cancel</button>
+                        </div>
+                    </div>
+                }
+
+                <div class="row g-2 mb-3">
+                    <div class="col-12 col-md-5">
+                        <label class="form-label small mb-1">Plant name *</label>
+                        <input class="form-control form-control-sm" @bind="_editing.Name" @bind:event="oninput" />
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small mb-1">Category</label>
+                        <select class="form-select form-select-sm" @bind="_editing.Category">
+                            @foreach (var cat in Enum.GetValues<PlantCategory>())
+                            {
+                                <option value="@cat">@cat</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <label class="form-label small mb-1">Icon (emoji or SVG path)</label>
+                        <input class="form-control form-control-sm" @bind="_editing.Icon" placeholder="🌱 or openmoji-svg/..." />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small mb-1">Description</label>
+                        <textarea class="form-control form-control-sm" rows="2" @bind="_editing.Description"></textarea>
+                    </div>
+                    <div class="col-4 col-md-3 d-flex align-items-end">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="edibleCheck" @bind="_editing.Edible" />
+                            <label class="form-check-label small" for="edibleCheck">Edible</label>
+                        </div>
+                    </div>
+                    <div class="col-8 col-md-9">
+                        <label class="form-label small mb-1">Edible parts</label>
+                        <input class="form-control form-control-sm" @bind="_editing.EdibleParts" placeholder="e.g. Ripe fruit, leaves" />
+                    </div>
+                </div>
+
+                <h6 class="section-head">Growing &amp; Spacing</h6>
+                <div class="row g-2 mb-3">
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small mb-1">Days to maturity</label>
+                        <input type="number" class="form-control form-control-sm" min="1" @bind="_editing.DaysToMaturity" />
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small mb-1">Sun</label>
+                        <input class="form-control form-control-sm" @bind="_editing.Sun" placeholder="Full sun" />
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small mb-1">Water</label>
+                        <input class="form-control form-control-sm" @bind="_editing.Water" placeholder="Regular" />
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small mb-1">USDA Zones (comma)</label>
+                        <input class="form-control form-control-sm" @bind="_zonesText" placeholder="3,4,5,6,7,8,9" />
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small mb-1">In-row spacing (in)</label>
+                        <input type="number" step="0.5" class="form-control form-control-sm" @bind="_spacing.InRowInches" />
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small mb-1">Between rows (in)</label>
+                        <input type="number" step="0.5" class="form-control form-control-sm" @bind="_spacing.BetweenRowsInches" />
+                    </div>
+                    <div class="col-4 col-md-2">
+                        <label class="form-label small mb-1">Plants / sq ft</label>
+                        <input type="number" min="1" class="form-control form-control-sm" @bind="_spacing.PlantsPerSquareFoot" />
+                    </div>
+                    <div class="col-4 col-md-2">
+                        <label class="form-label small mb-1">Span W</label>
+                        <input type="number" min="1" max="6" class="form-control form-control-sm" @bind="_spacing.CellSpanWidth" />
+                    </div>
+                    <div class="col-4 col-md-2">
+                        <label class="form-label small mb-1">Span H</label>
+                        <input type="number" min="1" max="6" class="form-control form-control-sm" @bind="_spacing.CellSpanHeight" />
+                    </div>
+                </div>
+
+                <h6 class="section-head">Companions &amp; Antagonists</h6>
+                <div class="mb-3">
+                    <div class="small text-muted mb-1">Click to cycle: Neutral → Companion (green) → Avoid (red)</div>
+                    <div class="d-flex flex-wrap gap-1">
+                        @foreach (var other in _plants.Where(x => x.Id != _editing.Id))
+                        {
+                            var oid = other.Id;
+                            var isComp = _editing.Companions.Contains(oid, StringComparer.OrdinalIgnoreCase);
+                            var isAnt = _editing.Antagonists.Contains(oid, StringComparer.OrdinalIgnoreCase);
+                            var cls = isAnt ? "btn-danger" : isComp ? "btn-success" : "btn-outline-secondary";
+                            <button type="button" class="btn btn-xs @cls" @onclick="() => CycleRelation(oid)">
+                                @other.Name @(isComp ? "✓" : isAnt ? "✕" : "")
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <h6 class="section-head">Health Benefits</h6>
+                <div class="mb-3">
+                    @foreach (var (benefit, idx) in (_editing.HealthBenefits ?? []).Select((b, i) => (b, i)))
+                    {
+                        var i = idx;
+                        <div class="input-group input-group-sm mb-1">
+                            <input class="form-control" value="@benefit" @onchange="e => _editing.HealthBenefits![i] = e.Value?.ToString() ?? string.Empty" />
+                            <button class="btn btn-outline-danger" @onclick="() => _editing.HealthBenefits!.RemoveAt(i)">×</button>
+                        </div>
+                    }
+                    <button class="btn btn-xs btn-outline-success" @onclick="AddBenefit">+ Add health benefit</button>
+                </div>
+
+                <h6 class="section-head">Warnings</h6>
+                <div class="mb-3">
+                    @foreach (var (w, idx) in (_editing.Warnings ?? []).Select((x, i) => (x, i)))
+                    {
+                        var warn = w;
+                        var i = idx;
+                        <div class="row g-1 mb-1 align-items-center">
+                            <div class="col-5 col-md-3">
+                                <select class="form-select form-select-sm" @bind="warn.Type">
+                                    @foreach (var wt in Enum.GetValues<WarningType>())
+                                    {
+                                        <option value="@wt">@wt</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-4 col-md-2">
+                                <select class="form-select form-select-sm" @bind="warn.Severity">
+                                    @foreach (var ws in Enum.GetValues<WarningSeverity>())
+                                    {
+                                        <option value="@ws">@ws</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-10 col-md-6">
+                                <input class="form-control form-control-sm" @bind="warn.Text" placeholder="Warning details" />
+                            </div>
+                            <div class="col-2 col-md-1">
+                                <button class="btn btn-sm btn-outline-danger w-100" @onclick="() => _editing.Warnings!.RemoveAt(i)">×</button>
+                            </div>
+                        </div>
+                    }
+                    <button class="btn btn-xs btn-outline-warning text-dark" @onclick="AddWarning">+ Add warning</button>
+                </div>
+
+                <h6 class="section-head">Planting Calendar Rules (weeks relative to frost)</h6>
+                <div class="mb-3">
+                    @foreach (var (rule, idx) in (_editing.CalendarRules ?? []).Select((x, i) => (x, i)))
+                    {
+                        var r = rule;
+                        var i = idx;
+                        <div class="row g-1 mb-1 align-items-center">
+                            <div class="col-6 col-md-3">
+                                <select class="form-select form-select-sm" @bind="r.Event">
+                                    @foreach (var ev in Enum.GetValues<CalendarEventType>())
+                                    {
+                                        <option value="@ev">@ev</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <select class="form-select form-select-sm" @bind="r.Anchor">
+                                    <option value="@FrostAnchor.LastSpringFrost">Last Spring Frost</option>
+                                    <option value="@FrostAnchor.FirstFallFrost">First Fall Frost</option>
+                                </select>
+                            </div>
+                            <div class="col-5 col-md-2">
+                                <input type="number" class="form-control form-control-sm" title="Start week offset" @bind="r.WeeksOffsetStart" />
+                            </div>
+                            <div class="col-5 col-md-3">
+                                <input type="number" class="form-control form-control-sm" title="End week offset" @bind="r.WeeksOffsetEnd" />
+                            </div>
+                            <div class="col-2 col-md-1">
+                                <button class="btn btn-sm btn-outline-danger w-100" @onclick="() => _editing.CalendarRules!.RemoveAt(i)">×</button>
+                            </div>
+                        </div>
+                    }
+                    <button class="btn btn-xs btn-outline-primary" @onclick="AddCalendarRule">+ Add calendar rule</button>
+                </div>
+
+                <h6 class="section-head">Varieties (@_editing.Varieties.Count)</h6>
+                <div class="mb-2">
+                    @foreach (var (v, idx) in _editing.Varieties.Select((x, i) => (x, i)))
+                    {
+                        var variety = v;
+                        var i = idx;
+                        <div class="variety-box mb-2">
+                            <div class="row g-2 align-items-end">
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label small mb-1">Variety name *</label>
+                                    <input class="form-control form-control-sm" @bind="variety.Name" />
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label small mb-1">Days to maturity</label>
+                                    <input type="number" class="form-control form-control-sm" placeholder="inherit" @bind="variety.DaysToMaturity" />
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <label class="form-label small mb-1">Description</label>
+                                    <input class="form-control form-control-sm" @bind="variety.Description" />
+                                </div>
+                                <div class="col-12 col-md-1">
+                                    <button class="btn btn-sm btn-outline-danger w-100" title="Remove variety" @onclick="() => _editing.Varieties.RemoveAt(i)">×</button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    <button class="btn btn-xs btn-outline-success" @onclick="AddVariety">+ Add variety</button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? EditId { get; set; }
+
+    private List<Plant> _plants = [];
+    private List<Plant> _hiddenSeedPlants = [];
+    private HashSet<string> _seedIds = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _userOverrideIds = new(StringComparer.OrdinalIgnoreCase);
+
+    private Plant? _editing;
+    private Spacing _spacing = new();
+    private string _zonesText = "";
+    private bool _isNew;
+    private string _search = "";
+    private string? _notice;
+    private int _deleteConfirmUsageCount;
+
+    private IEnumerable<Plant> FilteredPlants => _plants.Where(p =>
+        string.IsNullOrWhiteSpace(_search) ||
+        p.Name.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+        p.Varieties.Any(v => v.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await ReloadAsync();
+        if (!string.IsNullOrEmpty(EditId))
+        {
+            var match = _plants.FirstOrDefault(p => p.Id == EditId);
+            if (match is not null) SelectPlant(match);
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        var seed = PlantCatalogRepository.LoadSeed();
+        _seedIds = seed.Select(p => p.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var user = await CatalogRepo.LoadUserAsync();
+        _userOverrideIds = user.Plants.Select(p => p.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        _hiddenSeedPlants = seed.Where(p => user.HiddenPlantIds.Contains(p.Id)).ToList();
+        _plants = (await CatalogRepo.GetAllAsync()).ToList();
+    }
+
+    private void SelectPlant(Plant plant)
+    {
+        // Deep clone via JSON so edits aren't live until Save
+        var json = System.Text.Json.JsonSerializer.Serialize(plant, JsonDefaults.Options);
+        _editing = System.Text.Json.JsonSerializer.Deserialize<Plant>(json, JsonDefaults.Options)!;
+        _spacing = _editing.Spacing ?? new Spacing();
+        _zonesText = _editing.Zones is { Count: > 0 } ? string.Join(",", _editing.Zones) : "";
+        _isNew = false;
+        _deleteConfirmUsageCount = 0;
+    }
+
+    private void StartNew()
+    {
+        _editing = new Plant
+        {
+            Id = "plant-" + Guid.NewGuid().ToString("N")[..8],
+            Name = "",
+            Icon = "🌱",
+            Category = PlantCategory.Vegetable,
+            Edible = true,
+            IsUserDefined = true,
+            HealthBenefits = [],
+            Warnings = [],
+            CalendarRules = [],
+            Varieties = []
+        };
+        _spacing = new Spacing { InRowInches = 12, BetweenRowsInches = 18, PlantsPerSquareFoot = 1, CellSpanWidth = 1, CellSpanHeight = 1 };
+        _zonesText = "3,4,5,6,7,8,9";
+        _isNew = true;
+        _deleteConfirmUsageCount = 0;
+    }
+
+    private void CycleRelation(string otherId)
+    {
+        if (_editing is null) return;
+        var isComp = _editing.Companions.RemoveAll(x => string.Equals(x, otherId, StringComparison.OrdinalIgnoreCase)) > 0;
+        var isAnt = _editing.Antagonists.RemoveAll(x => string.Equals(x, otherId, StringComparison.OrdinalIgnoreCase)) > 0;
+        if (!isComp && !isAnt) _editing.Companions.Add(otherId);
+        else if (isComp) _editing.Antagonists.Add(otherId);
+    }
+
+    private void AddBenefit()
+    {
+        if (_editing is null) return;
+        _editing.HealthBenefits ??= [];
+        _editing.HealthBenefits.Add("");
+    }
+
+    private void AddWarning()
+    {
+        if (_editing is null) return;
+        _editing.Warnings ??= [];
+        _editing.Warnings.Add(new PlantWarning { Type = WarningType.ToxicToPets, Severity = WarningSeverity.Caution, Text = "" });
+    }
+
+    private void AddCalendarRule()
+    {
+        if (_editing is null) return;
+        _editing.CalendarRules ??= [];
+        _editing.CalendarRules.Add(new CalendarRule { Event = CalendarEventType.DirectSow, Anchor = FrostAnchor.LastSpringFrost, WeeksOffsetStart = 0, WeeksOffsetEnd = 2 });
+    }
+
+    private void AddVariety()
+    {
+        if (_editing is null) return;
+        _editing.Varieties.Add(new Variety { Id = $"{_editing.Id}-{Guid.NewGuid().ToString("N")[..6]}", Name = "", IsUserDefined = true });
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_editing is null || string.IsNullOrWhiteSpace(_editing.Name)) return;
+        _editing.Name = _editing.Name.Trim();
+        _editing.Spacing = _spacing;
+        _editing.Zones = _zonesText.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(s => int.TryParse(s, out var z) && z is >= 1 and <= 13 ? z : 0)
+            .Where(z => z > 0).Distinct().OrderBy(z => z).ToList();
+        _editing.HealthBenefits = _editing.HealthBenefits?.Where(b => !string.IsNullOrWhiteSpace(b)).ToList();
+        _editing.Warnings = _editing.Warnings?.Where(w => !string.IsNullOrWhiteSpace(w.Text)).ToList();
+        _editing.Varieties = _editing.Varieties.Where(v => !string.IsNullOrWhiteSpace(v.Name)).ToList();
+
+        await CatalogRepo.UpsertAsync(_editing);
+        await Session.RefreshCatalogAsync();
+        await ReloadAsync();
+        _isNew = false;
+        _notice = $"Saved \"{_editing.Name}\".";
+    }
+
+    private async Task ResetToDefaultAsync()
+    {
+        if (_editing is null) return;
+        var id = _editing.Id;
+        await CatalogRepo.ResetToDefaultAsync(id);
+        await Session.RefreshCatalogAsync();
+        await ReloadAsync();
+        var restored = _plants.FirstOrDefault(p => p.Id == id);
+        if (restored is not null) SelectPlant(restored);
+        _notice = "Restored plant to built-in defaults.";
+    }
+
+    private async Task RequestDeleteAsync()
+    {
+        if (_editing is null) return;
+        var count = await Transfer.CountPlantUsagesAsync(_editing.Id);
+        if (count > 0)
+        {
+            _deleteConfirmUsageCount = count;
+            return;
+        }
+        await ConfirmDeleteAsync(removeUsages: false);
+    }
+
+    private async Task ConfirmDeleteAsync(bool removeUsages)
+    {
+        if (_editing is null) return;
+        var name = _editing.Name;
+        var id = _editing.Id;
+        if (removeUsages) await Transfer.RemovePlantUsagesAsync(id);
+        await CatalogRepo.DeleteAsync(id);
+        await Session.RefreshCatalogAsync();
+        await ReloadAsync();
+        _editing = null;
+        _deleteConfirmUsageCount = 0;
+        _notice = $"Deleted \"{name}\".";
+    }
+
+    private async Task RestoreHiddenAsync(string plantId)
+    {
+        await CatalogRepo.ResetToDefaultAsync(plantId);
+        await Session.RefreshCatalogAsync();
+        await ReloadAsync();
+        _notice = "Restored hidden built-in plant.";
+    }
+}
+

@@ -1,6 +1,7 @@
 @page "/plan/{Id}"
 @implements IAsyncDisposable
 @inject GardenSession Session
+@inject PlanRepository PlanRepo
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
@@ -29,6 +30,10 @@ else
                 <button class="btn @(_mode == EditMode.Layout ? "btn-primary" : "btn-outline-primary")" @onclick="() => _mode = EditMode.Layout">Layout</button>
                 <button class="btn @(_mode == EditMode.Shape ? "btn-primary" : "btn-outline-primary")" @onclick="() => _mode = EditMode.Shape">Yard shape</button>
             </div>
+            @if (!Plan.IsTemplate)
+            {
+                <button class="btn btn-sm btn-outline-success" @onclick="SaveAsTemplateAsync" title="Save a copy of this garden as a reusable template">Save as template</button>
+            }
             <span class="status">@Session.StatusText</span>
         </div>
 
@@ -439,6 +444,14 @@ else
         var id = _selectedId;
         Session.Mutate(p => { p.Beds.RemoveAll(b => b.Id == id); p.Features.RemoveAll(f => f.Id == id); });
         _selectedId = null;
+    }
+
+    private async Task SaveAsTemplateAsync()
+    {
+        if (Plan is null) return;
+        await Session.FlushAsync();
+        await PlanRepo.CloneAsync(Plan, asTemplate: true, Plan.Name + " Template");
+        _message = $"Saved \"{Plan.Name}\" as a template.";
     }
 
     private static int ParseInt(ChangeEventArgs e, int fallback) => int.TryParse(e.Value?.ToString(), out var v) && v > 0 ? v : fallback;

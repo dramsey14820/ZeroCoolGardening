@@ -51,6 +51,12 @@ public sealed class GardenSession(PlanRepository plans, PlantCatalogRepository c
         Changed?.Invoke();
     }
 
+    public async Task RefreshCatalogAsync()
+    {
+        Plants = await catalog.GetAllAsync();
+        Changed?.Invoke();
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_saver is not null) await _saver.DisposeAsync();

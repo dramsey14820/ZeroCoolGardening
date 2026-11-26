@@ -1,0 +1,11 @@
+.catalog-layout { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+.catalog-list { flex: 0 0 280px; }
+.catalog-editor { flex: 1 1 420px; min-width: 0; }
+.section-head { font-size: .85rem; text-transform: uppercase; letter-spacing: .04em; color: #555; border-top: 1px solid #eee; padding-top: .6rem; margin-bottom: .45rem; }
+.variety-box { background: #f8faf8; border: 1px solid #e0ece0; border-radius: .35rem; padding: .5rem .6rem; }
+.btn-xs { padding: .15rem .45rem; font-size: .78rem; }
+
+@media (max-width: 767px) {
+    .catalog-list { flex: 1 1 100%; }
+}
+

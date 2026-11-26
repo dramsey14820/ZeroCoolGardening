@@ -1,42 +1,68 @@
 @page "/plans"
+@implements IAsyncDisposable
 @inject PlanRepository PlanRepo
+@inject TransferService Transfer
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
-<PageTitle>My Garden Plans</PageTitle>
-<h1>My Garden Plans</h1>
+<PageTitle>Garden Plans &amp; Templates</PageTitle>
 
-<div class="card p-3 mb-3">
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <h1 class="mb-0">Garden Plans &amp; Templates</h1>
+    <div class="d-flex flex-wrap gap-2">
+        <label class="btn btn-sm btn-outline-primary mb-0" style="cursor:pointer;">
+            Import Plan JSON
+            <InputFile OnChange="ImportPlanFileAsync" accept=".json,application/json" style="display:none;" />
+        </label>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="ExportBackupAsync">Export Full Backup</button>
+        <label class="btn btn-sm btn-outline-secondary mb-0" style="cursor:pointer;">
+            Import Backup
+            <InputFile OnChange="ImportBackupFileAsync" accept=".json,application/json" style="display:none;" />
+        </label>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(_notice))
+{
+    <div class="alert alert-info py-2 d-flex justify-content-between align-items-center">
+        <span>@_notice</span>
+        <button class="btn-close btn-sm" @onclick="() => _notice = null"></button>
+    </div>
+}
+
+<div class="card p-3 mb-4">
     <h5>New garden (yard)</h5>
     <div class="row g-2 align-items-end">
         <div class="col-12 col-md-5">
-            <label class="form-label">Name</label>
+            <label class="form-label small mb-1">Name</label>
             <input class="form-control" @bind="_name" @bind:event="oninput" />
         </div>
         <div class="col-6 col-md-2">
-            <label class="form-label">Width (ft)</label>
+            <label class="form-label small mb-1">Width (ft)</label>
             <input type="number" class="form-control" min="1" max="200" @bind="_width" />
         </div>
         <div class="col-6 col-md-2">
-            <label class="form-label">Length (ft)</label>
+            <label class="form-label small mb-1">Length (ft)</label>
             <input type="number" class="form-control" min="1" max="200" @bind="_height" />
         </div>
         <div class="col-12 col-md-3">
-            <button class="btn btn-success w-100" @onclick="CreateAsync" disabled="@string.IsNullOrWhiteSpace(_name)">Create</button>
+            <button class="btn btn-success w-100" @onclick="CreateAsync" disabled="@string.IsNullOrWhiteSpace(_name)">Create blank yard</button>
         </div>
     </div>
 </div>
 
+<h4 class="mb-2">My Plans</h4>
 @if (_plans is null)
 {
     <p>Loading…</p>
 }
 else if (_plans.Count == 0)
 {
-    <p>No garden plans yet. Create one above.</p>
+    <p class="text-muted">No garden plans yet. Create a blank yard above or start from a template below.</p>
 }
 else
 {
-    <ul class="list-group">
+    <ul class="list-group mb-4">
         @foreach (var p in _plans)
         {
             var plan = p;
@@ -45,9 +71,11 @@ else
                     <strong>@plan.Name</strong>
                     <small class="text-muted ms-2">@plan.GridWidth × @plan.GridHeight ft · @plan.Beds.Count bed(s)</small>
                 </div>
-                <div class="d-flex gap-2">
+                <div class="d-flex flex-wrap gap-1">
                     <a class="btn btn-sm btn-primary" href="plan/@plan.Id">Open</a>
+                    <button class="btn btn-sm btn-outline-success" @onclick="() => SaveAsTemplateAsync(plan)">Save as template</button>
                     <button class="btn btn-sm btn-outline-secondary" @onclick="() => DuplicateAsync(plan)">Duplicate</button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => ExportPlanAsync(plan)">Export JSON</button>
                     <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAsync(plan)">Delete</button>
                 </div>
             </li>
@@ -55,15 +83,71 @@ else
     </ul>
 }
 
+<h4 class="mb-2">My Templates</h4>
+@if (_userTemplates is { Count: > 0 })
+{
+    <ul class="list-group mb-4">
+        @foreach (var t in _userTemplates)
+        {
+            var tpl = t;
+            <li class="list-group-item d-flex flex-wrap gap-2 justify-content-between align-items-center">
+                <div>
+                    <strong>@tpl.Name</strong>
+                    <small class="text-muted ms-2">@tpl.GridWidth × @tpl.GridHeight ft · @tpl.Beds.Count bed(s)</small>
+                </div>
+                <div class="d-flex flex-wrap gap-1">
+                    <button class="btn btn-sm btn-success" @onclick="() => StartFromTemplateAsync(tpl)">Use template</button>
+                    <a class="btn btn-sm btn-outline-primary" href="plan/@tpl.Id">Edit template</a>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => ExportPlanAsync(tpl)">Export JSON</button>
+                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAsync(tpl)">Delete</button>
+                </div>
+            </li>
+        }
+    </ul>
+}
+else
+{
+    <p class="text-muted mb-4">No custom templates yet. Click <strong>Save as template</strong> on any plan to reuse it later.</p>
+}
+
+<h4 class="mb-2">Starter Templates</h4>
+<div class="row g-3 mb-4">
+    @foreach (var t in BuiltInTemplates.All)
+    {
+        var tpl = t;
+        <div class="col-12 col-md-4">
+            <div class="card h-100 p-3 d-flex flex-column justify-content-between">
+                <div>
+                    <h6 class="mb-1">@tpl.Name</h6>
+                    <div class="small text-muted mb-2">@tpl.GridWidth × @tpl.GridHeight ft · @tpl.Beds.Count bed(s)</div>
+                    <div class="small text-muted">
+                        @string.Join(", ", tpl.Beds.Select(b => $"{b.Name} ({b.Type})"))
+                    </div>
+                </div>
+                <button class="btn btn-sm btn-outline-success mt-3" @onclick="() => StartFromTemplateAsync(tpl)">
+                    Start from this template
+                </button>
+            </div>
+        </div>
+    }
+</div>
+
 @code {
     private List<GardenPlan>? _plans;
+    private List<GardenPlan>? _userTemplates;
+    private IJSObjectReference? _filesModule;
     private string _name = "My Garden";
     private int _width = 20;
     private int _height = 20;
+    private string? _notice;
 
     protected override async Task OnInitializedAsync() => await ReloadAsync();
 
-    private async Task ReloadAsync() => _plans = (await PlanRepo.ListAsync(templates: false)).ToList();
+    private async Task ReloadAsync()
+    {
+        _plans = (await PlanRepo.ListAsync(templates: false)).ToList();
+        _userTemplates = (await PlanRepo.ListAsync(templates: true)).ToList();
+    }
 
     private async Task CreateAsync()
     {
@@ -78,10 +162,78 @@ else
         await ReloadAsync();
     }
 
+    private async Task SaveAsTemplateAsync(GardenPlan plan)
+    {
+        await PlanRepo.CloneAsync(plan, asTemplate: true, plan.Name + " Template");
+        _notice = $"Saved \"{plan.Name}\" as a template.";
+        await ReloadAsync();
+    }
+
+    private async Task StartFromTemplateAsync(GardenPlan tpl)
+    {
+        var created = await PlanRepo.CloneAsync(tpl, asTemplate: false, tpl.Name.Replace(" Template", ""));
+        Nav.NavigateTo($"plan/{created.Id}");
+    }
+
     private async Task DeleteAsync(GardenPlan plan)
     {
         await PlanRepo.DeleteAsync(plan.Id, plan.IsTemplate);
         await ReloadAsync();
     }
-}
 
+    private async Task ExportPlanAsync(GardenPlan plan)
+    {
+        var json = Transfer.ExportPlanJson(plan);
+        var safe = string.Concat(plan.Name.Select(c => char.IsLetterOrDigit(c) ? c : '-')).Trim('-');
+        await DownloadAsync($"{(string.IsNullOrEmpty(safe) ? "garden-plan" : safe)}.json", json);
+    }
+
+    private async Task ExportBackupAsync()
+    {
+        var json = await Transfer.ExportBackupJsonAsync();
+        await DownloadAsync($"zerocool-garden-backup-{DateTime.Today:yyyy-MM-dd}.json", json);
+    }
+
+    private async Task DownloadAsync(string fileName, string content)
+    {
+        _filesModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/ZeroCool.UI/files.js");
+        await _filesModule.InvokeVoidAsync("downloadText", fileName, content, "application/json");
+    }
+
+    private async Task ImportPlanFileAsync(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var reader = new StreamReader(e.File.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024));
+            var json = await reader.ReadToEndAsync();
+            var plan = await Transfer.ImportPlanJsonAsync(json);
+            _notice = $"Imported \"{plan.Name}\".";
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _notice = $"Import failed: {ex.Message}";
+        }
+    }
+
+    private async Task ImportBackupFileAsync(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var reader = new StreamReader(e.File.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024));
+            var json = await reader.ReadToEndAsync();
+            var (p, t, c) = await Transfer.ImportBackupJsonAsync(json);
+            _notice = $"Backup imported: {p} plan(s), {t} template(s), {c} custom plant(s).";
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _notice = $"Backup import failed: {ex.Message}";
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_filesModule is not null) { try { await _filesModule.DisposeAsync(); } catch { } }
+    }
+}
