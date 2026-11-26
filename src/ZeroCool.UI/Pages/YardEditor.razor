@@ -2,6 +2,7 @@
 @implements IAsyncDisposable
 @inject GardenSession Session
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 
 <PageTitle>@(Plan?.Name ?? "Garden")</PageTitle>
 
@@ -60,7 +61,9 @@ else
                     @foreach (var b in Plan.Beds)
                     {
                         var bed = b;
-                        <g class="item @(_selectedId == bed.Id ? "selected" : "")" @onpointerdown="e => OnItemDown(e, bed.Id)" @onpointerdown:stopPropagation="true">
+                        <g class="item @(_selectedId == bed.Id ? "selected" : "")"
+                           @onpointerdown="e => OnItemDown(e, bed.Id)" @onpointerdown:stopPropagation="true"
+                           @ondblclick="@(() => Nav.NavigateTo($"plan/{Plan.Id}/bed/{bed.Id}"))" @ondblclick:stopPropagation="true">
                             <rect x="@bed.X" y="@bed.Y" width="@bed.Width" height="@bed.Height" rx="@(bed.Type == BedType.Container ? 0.5 : 0.1)"
                                   fill="@(_view == ViewMode.Soil ? SoilCatalog.ColorFor(bed.Soil) : "#7fb069")" class="bed" />
                             @if (bed.Type == BedType.Row)
@@ -81,7 +84,28 @@ else
                                     <line x1="@bed.X" x2="@(bed.X + bed.Width)" y1="@(bed.Y + gy)" y2="@(bed.Y + gy)" class="sfline" />
                                 }
                             }
-                            <SvgText X="@(bed.X + bed.Width / 2.0)" Y="@(bed.Y + bed.Height / 2.0)" Class="label">@bed.Name</SvgText>
+                            @if (_view == ViewMode.Plant && bed.Plantings.Count > 0)
+                            {
+                                @foreach (var pl in bed.Plantings)
+                                {
+                                    var info = PlantResolver.Resolve(Session.Plants, pl.PlantId, pl.VarietyId);
+                                    var sw = Math.Max(1, pl.SpanWidth);
+                                    var sh = Math.Max(1, pl.SpanHeight);
+                                    var svgUrl = IconCatalog.ResolveSvgUrl(info?.Icon, pl.PlantId);
+                                    var iconSz = Math.Min(sw, sh) * 0.72;
+                                    var px = bed.X + pl.X + (sw - iconSz) / 2.0;
+                                    var py = bed.Y + pl.Y + (sh - iconSz) / 2.0;
+                                    @if (svgUrl is not null)
+                                    {
+                                        <image href="@svgUrl" x="@px" y="@py" width="@iconSz" height="@iconSz" pointer-events="none" />
+                                    }
+                                    else
+                                    {
+                                        <SvgText X="@(bed.X + pl.X + sw / 2.0)" Y="@(bed.Y + pl.Y + sh / 2.0)" Class="label">@(info?.Icon ?? "🌱")</SvgText>
+                                    }
+                                }
+                            }
+                            <SvgText X="@(bed.X + bed.Width / 2.0)" Y="@(_view == ViewMode.Plant && bed.Plantings.Count > 0 ? bed.Y + 0.35 : bed.Y + bed.Height / 2.0)" Class="label">@bed.Name</SvgText>
                             @if (_view == ViewMode.Soil && !string.IsNullOrEmpty(bed.Soil))
                             {
                                 <SvgText X="@(bed.X + bed.Width / 2.0)" Y="@(bed.Y + bed.Height / 2.0 + 0.8)" Class="sublabel">@bed.Soil</SvgText>
@@ -117,6 +141,9 @@ else
                 @if (SelectedBed is { } sb && _mode == EditMode.Layout)
                 {
                     <h6>Bed</h6>
+                    <a class="btn btn-sm btn-success w-100 mb-2" href="plan/@Plan.Id/bed/@sb.Id">
+                        Open bed &amp; plant (@sb.Plantings.Count)
+                    </a>
                     <label class="form-label small">Name</label>
                     <input class="form-control form-control-sm mb-2" value="@sb.Name" @onchange="e => Session.Mutate(_ => sb.Name = e.Value?.ToString() ?? sb.Name)" />
                     <label class="form-label small">Type</label>
@@ -343,7 +370,7 @@ else
         Session.Mutate(p =>
         {
             var bed = p.Beds.FirstOrDefault(b => b.Id == id);
-            if (bed is not null) { bed.Width = w; bed.Height = h; return; }
+            if (bed is not null) { bed.Width = w; bed.Height = h; SquareFootRules.TrimOutside(bed); return; }
             var f = p.Features.FirstOrDefault(x => x.Id == id);
             if (f is not null) { f.Width = w; f.Height = h; }
         });

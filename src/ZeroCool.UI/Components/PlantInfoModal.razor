@@ -1,0 +1,219 @@
+@if (Info is not null)
+{
+    <div class="modal-backdrop-custom" @onclick="OnClose">
+        <div class="modal-card" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-label="@Info.DisplayName">
+            <div class="modal-head">
+                <div class="d-flex align-items-center gap-2">
+                    <PlantIcon Icon="@Info.Icon" FallbackKey="@Info.PlantId" Alt="@Info.DisplayName" Size="36" />
+                    <div>
+                        <h5 class="mb-0">@Info.DisplayName</h5>
+                        <div class="small text-muted">
+                            @Info.Plant.Category
+                            @if (Info.Plant.Edible)
+                            {
+                                <span> · Edible@(string.IsNullOrWhiteSpace(Info.Plant.EdibleParts) ? "" : $" ({Info.Plant.EdibleParts})")</span>
+                            }
+                            else
+                            {
+                                <span> · Non-edible</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+                <button class="btn-close" aria-label="Close" @onclick="OnClose"></button>
+            </div>
+
+            <div class="modal-body-custom">
+                @if (!string.IsNullOrWhiteSpace(Info.Description))
+                {
+                    <p class="mb-2">@Info.Description</p>
+                }
+
+                @if (Info.Warnings.Count > 0)
+                {
+                    <div class="section warnings-box">
+                        <div class="section-title">Warnings</div>
+                        @foreach (var w in Info.Warnings)
+                        {
+                            <div class="warning-row">
+                                <span class="badge @SeverityBadge(w.Severity)">@FormatWarningType(w.Type)</span>
+                                <span>@w.Text</span>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (Planting is not null)
+                {
+                    <div class="section placement-box">
+                        <div class="section-title">In this bed</div>
+                        @if (!string.IsNullOrEmpty(PlacementError))
+                        {
+                            <div class="alert alert-warning py-1 px-2 small mb-2">@PlacementError</div>
+                        }
+                        @if (Info.Plant.Varieties.Count > 0)
+                        {
+                            <div class="mb-2">
+                                <label class="form-label small mb-1">Variety</label>
+                                <select class="form-select form-select-sm" value="@(Planting.VarietyId ?? "")" @onchange="e => OnVarietyChanged.InvokeAsync(NullIfEmpty(e.Value))">
+                                    <option value="">@Info.Plant.Name (generic)</option>
+                                    @foreach (var v in Info.Plant.Varieties)
+                                    {
+                                        <option value="@v.Id">@v.Name</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                        <div class="row g-2 align-items-end">
+                            <div class="col-4">
+                                <label class="form-label small mb-1">Plants / spot</label>
+                                <input type="number" class="form-control form-control-sm" min="1" max="36"
+                                       value="@(Planting.Count ?? Info.SquareFootDefault.PlantsPerSquareFoot)"
+                                       @onchange="e => OnCountChanged.InvokeAsync(ParsePositive(e, Planting.Count ?? 1))" />
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small mb-1">Span W (cells)</label>
+                                <input type="number" class="form-control form-control-sm" min="1" max="12"
+                                       value="@Planting.SpanWidth"
+                                       @onchange="e => OnSpanChanged.InvokeAsync((ParsePositive(e, Planting.SpanWidth), Planting.SpanHeight))" />
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small mb-1">Span H (cells)</label>
+                                <input type="number" class="form-control form-control-sm" min="1" max="12"
+                                       value="@Planting.SpanHeight"
+                                       @onchange="e => OnSpanChanged.InvokeAsync((Planting.SpanWidth, ParsePositive(e, Planting.SpanHeight)))" />
+                            </div>
+                        </div>
+                        <div class="mt-2 d-flex justify-content-end">
+                            <button class="btn btn-sm btn-outline-danger" @onclick="OnRemovePlanting">Remove from bed</button>
+                        </div>
+                    </div>
+                }
+
+                <div class="facts-grid">
+                    @if (Info.DaysToMaturity is > 0)
+                    {
+                        <div><strong>Maturity:</strong> @Info.DaysToMaturity days</div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Info.Sun))
+                    {
+                        <div><strong>Sun:</strong> @Info.Sun</div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Info.Water))
+                    {
+                        <div><strong>Water:</strong> @Info.Water</div>
+                    }
+                    @if (Info.Zones.Count > 0)
+                    {
+                        <div><strong>USDA Zones:</strong> @Info.Zones.Min()–@Info.Zones.Max()</div>
+                    }
+                    @{
+                        var sf = Info.SquareFootDefault;
+                    }
+                    <div>
+                        <strong>Square-foot guide:</strong>
+                        @if (sf.SpanWidth > 1 || sf.SpanHeight > 1)
+                        {
+                            <span>@sf.SpanWidth × @sf.SpanHeight cells (@sf.PlantsPerSquareFoot plant)</span>
+                        }
+                        else
+                        {
+                            <span>@sf.PlantsPerSquareFoot per sq ft</span>
+                        }
+                    </div>
+                    @if (Info.EffectiveSpacing.InRowInches is > 0)
+                    {
+                        <div>
+                            <strong>Packet spacing:</strong>
+                            @Info.EffectiveSpacing.InRowInches" in-row@(Info.EffectiveSpacing.BetweenRowsInches is > 0 ? $" · {Info.EffectiveSpacing.BetweenRowsInches}\" between rows" : "")
+                        </div>
+                    }
+                    @if (Info.Plant.PreferredSoils.Count > 0)
+                    {
+                        <div><strong>Preferred soil:</strong> @string.Join(", ", Info.Plant.PreferredSoils)</div>
+                    }
+                </div>
+
+                @if (Info.Plant.Companions.Count > 0 || Info.Plant.Antagonists.Count > 0)
+                {
+                    <div class="section">
+                        @if (Info.Plant.Companions.Count > 0)
+                        {
+                            <div class="mb-1">
+                                <strong class="small text-success">Companions:</strong>
+                                @foreach (var cid in Info.Plant.Companions)
+                                {
+                                    <span class="chip chip-good">@NameFor(cid)</span>
+                                }
+                            </div>
+                        }
+                        @if (Info.Plant.Antagonists.Count > 0)
+                        {
+                            <div>
+                                <strong class="small text-danger">Avoid planting near:</strong>
+                                @foreach (var aid in Info.Plant.Antagonists)
+                                {
+                                    <span class="chip chip-bad">@NameFor(aid)</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (Info.HealthBenefits.Count > 0)
+                {
+                    <div class="section">
+                        <div class="section-title">Health benefits</div>
+                        <ul class="mb-1 ps-3 small">
+                            @foreach (var b in Info.HealthBenefits)
+                            {
+                                <li>@b</li>
+                            }
+                        </ul>
+                        <div class="disclaimer">Informational only — not medical or veterinary advice.</div>
+                    </div>
+                }
+
+                @if (Info.Sources.Count > 0)
+                {
+                    <div class="sources">Sources: @string.Join("; ", Info.Sources)</div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public ResolvedPlant? Info { get; set; }
+    [Parameter] public Planting? Planting { get; set; }
+    [Parameter] public IReadOnlyList<Plant> Catalog { get; set; } = [];
+    [Parameter] public string? PlacementError { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnRemovePlanting { get; set; }
+    [Parameter] public EventCallback<string?> OnVarietyChanged { get; set; }
+    [Parameter] public EventCallback<int> OnCountChanged { get; set; }
+    [Parameter] public EventCallback<(int W, int H)> OnSpanChanged { get; set; }
+
+    private string NameFor(string id) => Catalog.FirstOrDefault(p => p.Id == id)?.Name ?? id;
+
+    private static string SeverityBadge(WarningSeverity s) => s switch
+    {
+        WarningSeverity.Danger => "bg-danger",
+        WarningSeverity.Caution => "bg-warning text-dark",
+        _ => "bg-info text-dark"
+    };
+
+    private static string FormatWarningType(WarningType t) => t switch
+    {
+        WarningType.ToxicToPets => "Pet toxic",
+        WarningType.ToxicToHumans => "Toxic",
+        WarningType.ToxicToChildren => "Child hazard",
+        WarningType.SkinIrritant => "Skin irritant",
+        WarningType.UnsafeParts => "Unsafe parts",
+        _ => t.ToString()
+    };
+
+    private static string? NullIfEmpty(object? v) => string.IsNullOrEmpty(v?.ToString()) ? null : v!.ToString();
+    private static int ParsePositive(ChangeEventArgs e, int fallback) => int.TryParse(e.Value?.ToString(), out var v) && v > 0 ? v : fallback;
+}
+

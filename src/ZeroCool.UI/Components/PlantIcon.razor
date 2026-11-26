@@ -1,0 +1,18 @@
+@if (SvgUrl is not null)
+{
+    <img src="@SvgUrl" alt="@Alt" width="@Size" height="@Size" style="width:@(Size)px;height:@(Size)px;object-fit:contain;vertical-align:middle;" />
+}
+else
+{
+    <span style="font-size:@(Size)px;line-height:1;vertical-align:middle;" aria-label="@Alt">@(Icon ?? "🌱")</span>
+}
+
+@code {
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public string? FallbackKey { get; set; }
+    [Parameter] public string Alt { get; set; } = "";
+    [Parameter] public int Size { get; set; } = 24;
+
+    private string? SvgUrl => IconCatalog.ResolveSvgUrl(Icon, FallbackKey);
+}
+

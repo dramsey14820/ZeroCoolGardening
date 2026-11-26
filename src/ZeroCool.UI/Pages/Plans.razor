@@ -1,5 +1,5 @@
 @page "/plans"
-@inject PlanRepository Plans
+@inject PlanRepository PlanRepo
 @inject NavigationManager Nav
 
 <PageTitle>My Garden Plans</PageTitle>
@@ -63,24 +63,24 @@ else
 
     protected override async Task OnInitializedAsync() => await ReloadAsync();
 
-    private async Task ReloadAsync() => _plans = (await Plans.ListAsync(templates: false)).ToList();
+    private async Task ReloadAsync() => _plans = (await PlanRepo.ListAsync(templates: false)).ToList();
 
     private async Task CreateAsync()
     {
         var plan = new GardenPlan { Name = _name.Trim(), GridWidth = Math.Clamp(_width, 1, 200), GridHeight = Math.Clamp(_height, 1, 200) };
-        await Plans.SaveAsync(plan);
+        await PlanRepo.SaveAsync(plan);
         Nav.NavigateTo($"plan/{plan.Id}");
     }
 
     private async Task DuplicateAsync(GardenPlan plan)
     {
-        await Plans.CloneAsync(plan, asTemplate: false, plan.Name + " (copy)");
+        await PlanRepo.CloneAsync(plan, asTemplate: false, plan.Name + " (copy)");
         await ReloadAsync();
     }
 
     private async Task DeleteAsync(GardenPlan plan)
     {
-        await Plans.DeleteAsync(plan.Id, plan.IsTemplate);
+        await PlanRepo.DeleteAsync(plan.Id, plan.IsTemplate);
         await ReloadAsync();
     }
 }

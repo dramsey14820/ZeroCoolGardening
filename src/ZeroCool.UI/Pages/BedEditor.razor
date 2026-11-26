@@ -1,0 +1,486 @@
+@page "/plan/{PlanId}/bed/{BedId}"
+@implements IAsyncDisposable
+@inject GardenSession Session
+@inject IJSRuntime JS
+
+<PageTitle>@(Bed?.Name ?? "Bed") — @(Plan?.Name ?? "Garden")</PageTitle>
+
+@if (!_loaded)
+{
+    <p>Loading…</p>
+}
+else if (Plan is null || Bed is null)
+{
+    <p>Bed not found. <a href="plans">Back to plans</a></p>
+}
+else
+{
+    <div class="bed-editor">
+        <div class="toolbar">
+            <a href="plan/@Plan.Id" class="btn btn-sm btn-outline-secondary">← Yard</a>
+            <strong class="bed-title">@Bed.Name</strong>
+            <span class="badge bg-secondary">@Bed.Width × @Bed.Height ft · @Bed.Type</span>
+            <div class="btn-group btn-group-sm" role="group" aria-label="View">
+                <button class="btn @(_view == ViewMode.Plant ? "btn-success" : "btn-outline-success")" @onclick="() => _view = ViewMode.Plant">Plants</button>
+                <button class="btn @(_view == ViewMode.Soil ? "btn-success" : "btn-outline-success")" @onclick="() => _view = ViewMode.Soil">Soil</button>
+            </div>
+            <span class="status">@Session.StatusText</span>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_message))
+        {
+            <div class="alert alert-warning py-1 mb-0 small">@_message</div>
+        }
+
+        @if (_armedPlantId is not null)
+        {
+            var armed = PlantResolver.Resolve(Session.Plants, _armedPlantId, _armedVarietyId);
+            if (armed is not null)
+            {
+                var sf = armed.SquareFootDefault;
+                <div class="armed-bar">
+                    <PlantIcon Icon="@armed.Icon" FallbackKey="@armed.PlantId" Alt="@armed.DisplayName" Size="22" />
+                    <span>
+                        <strong>Placing: @armed.DisplayName</strong>
+                        (@(sf.SpanWidth > 1 || sf.SpanHeight > 1 ? $"{sf.SpanWidth}×{sf.SpanHeight} cells" : $"{sf.PlantsPerSquareFoot}/sq ft"))
+                        — tap an empty cell to place.
+                    </span>
+                    <button class="btn btn-sm btn-outline-dark ms-auto" @onclick="ClearArmed">Done</button>
+                </div>
+            }
+        }
+
+        <div class="workspace">
+            <div class="canvas-wrap">
+                <svg @ref="_svg" class="bed-svg" viewBox="0 0 @Bed.Width @Bed.Height"
+                     @onpointerdown="OnGridDown" @onpointermove="OnMove" @onpointerup="OnUp" @onpointercancel="OnUp">
+                    @for (var y = 0; y < Bed.Height; y++)
+                    {
+                        for (var x = 0; x < Bed.Width; x++)
+                        {
+                            <rect x="@x" y="@y" width="1" height="1"
+                                  fill="@(_view == ViewMode.Soil ? SoilCatalog.ColorFor(Bed.Soil) : "#d9ecd0")"
+                                  class="sf-cell" />
+                        }
+                    }
+
+                    @if (_view == ViewMode.Soil)
+                    {
+                        <SvgText X="@(Bed.Width / 2.0)" Y="@(Bed.Height / 2.0)" Class="soil-banner">
+                            @(string.IsNullOrEmpty(Bed.Soil) ? "Soil not set" : Bed.Soil)
+                        </SvgText>
+                        @if (!string.IsNullOrEmpty(Bed.Fertilizer))
+                        {
+                            <SvgText X="@(Bed.Width / 2.0)" Y="@(Bed.Height / 2.0 + 0.55)" Class="soil-sub">
+                                Fertilizer: @Bed.Fertilizer
+                            </SvgText>
+                        }
+                    }
+                    else
+                    {
+                        @foreach (var p in Bed.Plantings)
+                        {
+                            var planting = p;
+                            var info = PlantResolver.Resolve(Session.Plants, planting.PlantId, planting.VarietyId);
+                            var sw = Math.Max(1, planting.SpanWidth);
+                            var sh = Math.Max(1, planting.SpanHeight);
+                            var count = Math.Max(1, planting.Count ?? info?.SquareFootDefault.PlantsPerSquareFoot ?? 1);
+                            var svgUrl = IconCatalog.ResolveSvgUrl(info?.Icon, planting.PlantId);
+                            var isMultiCell = sw > 1 || sh > 1;
+                            var hasWarnings = info?.Warnings.Count > 0;
+
+                            <g class="planting @(_draggingId == planting.Id ? "dragging" : "")"
+                               @onpointerdown="e => OnPlantingDown(e, planting.Id)" @onpointerdown:stopPropagation="true">
+                                <rect x="@(planting.X + 0.04)" y="@(planting.Y + 0.04)"
+                                      width="@(sw - 0.08)" height="@(sh - 0.08)" rx="0.1"
+                                      class="plant-tile @(isMultiCell ? "multi" : "")" />
+
+                                @if (isMultiCell || count == 1)
+                                {
+                                    var iconSize = Math.Min(sw, sh) * 0.56;
+                                    var ix = planting.X + (sw - iconSize) / 2.0;
+                                    var iy = planting.Y + (sh - iconSize) / 2.0 - 0.08;
+                                    @if (svgUrl is not null)
+                                    {
+                                        <image href="@svgUrl" x="@ix" y="@iy" width="@iconSize" height="@iconSize" pointer-events="none" />
+                                    }
+                                    else
+                                    {
+                                        <SvgText X="@(planting.X + sw / 2.0)" Y="@(planting.Y + sh / 2.0 - 0.05)" Class="plant-emoji">@(info?.Icon ?? "🌱")</SvgText>
+                                    }
+                                }
+                                else
+                                {
+                                    var (cols, rows) = PlantResolver.SubGrid(count);
+                                    var cellW = (sw - 0.16) / cols;
+                                    var cellH = (sh - 0.28) / rows;
+                                    var iconSize = Math.Min(cellW, cellH) * 0.82;
+                                    @for (var i = 0; i < count; i++)
+                                    {
+                                        var c = i % cols;
+                                        var r = i / cols;
+                                        var cx = planting.X + 0.08 + c * cellW + (cellW - iconSize) / 2.0;
+                                        var cy = planting.Y + 0.06 + r * cellH + (cellH - iconSize) / 2.0;
+                                        @if (svgUrl is not null)
+                                        {
+                                            <image href="@svgUrl" x="@cx" y="@cy" width="@iconSize" height="@iconSize" pointer-events="none" />
+                                        }
+                                        else
+                                        {
+                                            <SvgText X="@(cx + iconSize / 2.0)" Y="@(cy + iconSize / 2.0)" Class="sub-emoji">@(info?.Icon ?? "🌱")</SvgText>
+                                        }
+                                    }
+                                }
+
+                                <SvgText X="@(planting.X + sw / 2.0)" Y="@(planting.Y + sh - 0.14)" Class="plant-label">
+                                    @(info?.ShortName ?? planting.PlantId)
+                                </SvgText>
+
+                                @if (count > 1)
+                                {
+                                    <rect x="@(planting.X + sw - 0.36)" y="@(planting.Y + 0.06)" width="0.3" height="0.2" rx="0.06" class="count-pill" />
+                                    <SvgText X="@(planting.X + sw - 0.21)" Y="@(planting.Y + 0.165)" Class="count-text">×@count</SvgText>
+                                }
+                                else if (isMultiCell)
+                                {
+                                    <rect x="@(planting.X + sw - 0.44)" y="@(planting.Y + 0.06)" width="0.38" height="0.2" rx="0.06" class="count-pill" />
+                                    <SvgText X="@(planting.X + sw - 0.25)" Y="@(planting.Y + 0.165)" Class="count-text">@($"{sw}×{sh}")</SvgText>
+                                }
+
+                                @if (hasWarnings)
+                                {
+                                    <circle cx="@(planting.X + 0.16)" cy="@(planting.Y + 0.16)" r="0.09" class="warn-dot" />
+                                    <SvgText X="@(planting.X + 0.16)" Y="@(planting.Y + 0.17)" Class="warn-bang">!</SvgText>
+                                }
+                            </g>
+                        }
+                    }
+                </svg>
+                <p class="hint">
+                    Tap a plant in the palette, then tap a cell to plant it. Drag planted items to move them, or tap one to view details, health info, and warnings.
+                </p>
+            </div>
+
+            <div class="palette @(_paletteOpen ? "open" : "")">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Plants &amp; Varieties</h6>
+                    <button class="btn btn-sm btn-outline-secondary d-md-none" @onclick="() => _paletteOpen = false">Close</button>
+                </div>
+
+                <input class="form-control form-control-sm mb-2" placeholder="Search plants or varieties…"
+                       @bind="_search" @bind:event="oninput" />
+
+                <div class="cat-pills mb-2">
+                    <button class="btn btn-xs @(_categoryFilter is null ? "btn-success" : "btn-outline-secondary")" @onclick="() => _categoryFilter = null">All</button>
+                    @foreach (var cat in AvailableCategories)
+                    {
+                        var c = cat;
+                        <button class="btn btn-xs @(_categoryFilter == c ? "btn-success" : "btn-outline-secondary")" @onclick="() => _categoryFilter = c">@c</button>
+                    }
+                </div>
+
+                <div class="palette-list">
+                    @foreach (var plant in FilteredPlants)
+                    {
+                        var p = plant;
+                        var sf = PlantResolver.RecommendedSquareFoot(p.Spacing);
+                        var isArmedGeneric = _armedPlantId == p.Id && _armedVarietyId is null;
+                        <div class="plant-card @(isArmedGeneric ? "armed" : "")">
+                            <div class="plant-card-top" @onclick="() => Arm(p.Id, null)">
+                                <PlantIcon Icon="@p.Icon" FallbackKey="@p.Id" Alt="@p.Name" Size="26" />
+                                <div class="plant-card-meta">
+                                    <div class="fw-semibold">
+                                        @p.Name
+                                        @if (p.Warnings is { Count: > 0 })
+                                        {
+                                            <span class="badge bg-warning text-dark ms-1" title="Has safety warnings">!</span>
+                                        }
+                                    </div>
+                                    <div class="small text-muted">
+                                        @(sf.SpanWidth > 1 || sf.SpanHeight > 1 ? $"{sf.SpanWidth}×{sf.SpanHeight} cells" : $"{sf.PlantsPerSquareFoot}/sq ft")
+                                        · @p.Category
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-1" @onclick:stopPropagation="true">
+                                    <button class="btn btn-xs btn-outline-success" title="Auto-place in next free spot" @onclick="() => AutoPlace(p.Id, null)">+ Place</button>
+                                    <button class="btn btn-xs btn-outline-secondary" title="Plant info" @onclick="() => OpenPreview(p.Id, null)">i</button>
+                                </div>
+                            </div>
+
+                            @if (p.Varieties.Count > 0)
+                            {
+                                <div class="varieties">
+                                    @foreach (var v in p.Varieties)
+                                    {
+                                        var variety = v;
+                                        var isArmedVar = _armedPlantId == p.Id && _armedVarietyId == variety.Id;
+                                        <button class="btn btn-xs @(isArmedVar ? "btn-success" : "btn-outline-secondary")"
+                                                @onclick="() => Arm(p.Id, variety.Id)">
+                                            @variety.Name
+                                        </button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <button class="fab d-md-none" aria-label="Add plant" title="Add plant" @onclick="() => _paletteOpen = !_paletteOpen">
+            @(_paletteOpen ? "×" : "+")
+        </button>
+    </div>
+
+    <PlantInfoModal Info="@ModalInfo"
+                    Planting="@ModalPlanting"
+                    Catalog="@Session.Plants"
+                    PlacementError="@_modalError"
+                    OnClose="CloseModal"
+                    OnRemovePlanting="RemoveModalPlanting"
+                    OnVarietyChanged="ChangeModalVariety"
+                    OnCountChanged="ChangeModalCount"
+                    OnSpanChanged="ChangeModalSpan" />
+}
+
+@code {
+    private enum ViewMode { Plant, Soil }
+
+    [Parameter] public string PlanId { get; set; } = "";
+    [Parameter] public string BedId { get; set; } = "";
+
+    private GardenPlan? Plan => Session.Plan;
+    private Bed? Bed => Plan?.Beds.FirstOrDefault(b => b.Id == BedId);
+
+    private ElementReference _svg;
+    private IJSObjectReference? _module;
+    private bool _loaded;
+    private bool _paletteOpen;
+    private ViewMode _view = ViewMode.Plant;
+    private string? _message;
+    private string _search = "";
+    private PlantCategory? _categoryFilter;
+
+    // armed plant for tap-to-place
+    private string? _armedPlantId;
+    private string? _armedVarietyId;
+
+    // pointer drag state
+    private double _left, _top, _scale = 1;
+    private string? _draggingId;
+    private int _dragOffX, _dragOffY;
+    private double _downClientX, _downClientY;
+    private bool _movedDuringDrag;
+
+    // info modal state (either for an existing planting, or previewing a catalog plant)
+    private string? _modalPlantingId;
+    private string? _previewPlantId;
+    private string? _previewVarietyId;
+    private string? _modalError;
+
+    private Planting? ModalPlanting => Bed?.Plantings.FirstOrDefault(p => p.Id == _modalPlantingId);
+
+    private ResolvedPlant? ModalInfo =>
+        ModalPlanting is { } mp ? PlantResolver.Resolve(Session.Plants, mp.PlantId, mp.VarietyId)
+        : _previewPlantId is not null ? PlantResolver.Resolve(Session.Plants, _previewPlantId, _previewVarietyId)
+        : null;
+
+    private IEnumerable<PlantCategory> AvailableCategories =>
+        Session.Plants.Select(p => p.Category).Distinct().OrderBy(c => c);
+
+    private IEnumerable<Plant> FilteredPlants => Session.Plants.Where(p =>
+        (_categoryFilter is null || p.Category == _categoryFilter) &&
+        (string.IsNullOrWhiteSpace(_search) ||
+         p.Name.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         p.Varieties.Any(v => v.Name.Contains(_search, StringComparison.OrdinalIgnoreCase))));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loaded = false;
+        Session.Changed -= OnSessionChanged;
+        if (Session.Plan?.Id != PlanId)
+            await Session.LoadAsync(PlanId);
+        Session.Changed += OnSessionChanged;
+        _loaded = true;
+    }
+
+    private void OnSessionChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void Arm(string plantId, string? varietyId)
+    {
+        _armedPlantId = plantId;
+        _armedVarietyId = varietyId;
+        _paletteOpen = false;
+        _message = null;
+    }
+
+    private void ClearArmed()
+    {
+        _armedPlantId = null;
+        _armedVarietyId = null;
+    }
+
+    private void AutoPlace(string plantId, string? varietyId)
+    {
+        if (Bed is null) return;
+        var info = PlantResolver.Resolve(Session.Plants, plantId, varietyId);
+        if (info is null) return;
+        var (perSqFt, spanW, spanH) = info.SquareFootDefault;
+        var spot = SquareFootRules.FindFreeSpot(Bed, spanW, spanH);
+        if (spot is null)
+        {
+            _message = $"No room for {info.DisplayName} ({spanW}×{spanH} cells) in this bed.";
+            return;
+        }
+        PlaceAt(info, spot.Value.X, spot.Value.Y, spanW, spanH, perSqFt);
+    }
+
+    private void PlaceAt(ResolvedPlant info, int x, int y, int spanW, int spanH, int count)
+    {
+        if (Bed is null) return;
+        if (!SquareFootRules.CanPlace(Bed, null, x, y, spanW, spanH))
+        {
+            _message = $"{info.DisplayName} needs {spanW}×{spanH} free cells — doesn't fit at ({x + 1}, {y + 1}).";
+            return;
+        }
+        _message = null;
+        var bed = Bed;
+        Session.Mutate(_ => bed.Plantings.Add(new Planting
+        {
+            PlantId = info.PlantId,
+            VarietyId = info.VarietyId,
+            X = x,
+            Y = y,
+            SpanWidth = spanW,
+            SpanHeight = spanH,
+            Count = count
+        }));
+    }
+
+    private async Task RefreshRectAsync()
+    {
+        _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/ZeroCool.UI/grid.js");
+        var r = await _module.InvokeAsync<Rect>("getRect", _svg);
+        _left = r.Left; _top = r.Top;
+        _scale = Bed is null || Bed.Width == 0 ? 1 : r.Width / Bed.Width;
+    }
+
+    private (int X, int Y) CellAt(PointerEventArgs e) =>
+        ((int)Math.Floor((e.ClientX - _left) / _scale), (int)Math.Floor((e.ClientY - _top) / _scale));
+
+    private async Task OnGridDown(PointerEventArgs e)
+    {
+        if (Bed is null || _view != ViewMode.Plant || _armedPlantId is null) return;
+        await RefreshRectAsync();
+        var cell = CellAt(e);
+        var info = PlantResolver.Resolve(Session.Plants, _armedPlantId, _armedVarietyId);
+        if (info is null) return;
+        var (perSqFt, spanW, spanH) = info.SquareFootDefault;
+        PlaceAt(info, cell.X, cell.Y, spanW, spanH, perSqFt);
+    }
+
+    private async Task OnPlantingDown(PointerEventArgs e, string plantingId)
+    {
+        if (Bed is null || _view != ViewMode.Plant) return;
+        await RefreshRectAsync();
+        await _module!.InvokeVoidAsync("capture", _svg, e.PointerId);
+        var p = Bed.Plantings.First(x => x.Id == plantingId);
+        var cell = CellAt(e);
+        _draggingId = plantingId;
+        _dragOffX = cell.X - p.X;
+        _dragOffY = cell.Y - p.Y;
+        _downClientX = e.ClientX;
+        _downClientY = e.ClientY;
+        _movedDuringDrag = false;
+        _message = null;
+    }
+
+    private void OnMove(PointerEventArgs e)
+    {
+        if (Bed is null || _draggingId is null) return;
+        if (Math.Abs(e.ClientX - _downClientX) > 6 || Math.Abs(e.ClientY - _downClientY) > 6)
+            _movedDuringDrag = true;
+
+        var p = Bed.Plantings.FirstOrDefault(x => x.Id == _draggingId);
+        if (p is null) return;
+        var cell = CellAt(e);
+        var nx = cell.X - _dragOffX;
+        var ny = cell.Y - _dragOffY;
+        if ((nx != p.X || ny != p.Y) && SquareFootRules.CanPlace(Bed, p.Id, nx, ny, Math.Max(1, p.SpanWidth), Math.Max(1, p.SpanHeight)))
+        {
+            _movedDuringDrag = true;
+            Session.Mutate(_ => { p.X = nx; p.Y = ny; });
+        }
+    }
+
+    private void OnUp(PointerEventArgs e)
+    {
+        if (_draggingId is not null && !_movedDuringDrag)
+        {
+            _modalPlantingId = _draggingId;
+            _previewPlantId = null;
+            _modalError = null;
+        }
+        _draggingId = null;
+        _movedDuringDrag = false;
+    }
+
+    private void OpenPreview(string plantId, string? varietyId)
+    {
+        _modalPlantingId = null;
+        _previewPlantId = plantId;
+        _previewVarietyId = varietyId;
+        _modalError = null;
+    }
+
+    private void CloseModal()
+    {
+        _modalPlantingId = null;
+        _previewPlantId = null;
+        _previewVarietyId = null;
+        _modalError = null;
+    }
+
+    private void RemoveModalPlanting()
+    {
+        if (Bed is null || _modalPlantingId is null) return;
+        var id = _modalPlantingId;
+        var bed = Bed;
+        Session.Mutate(_ => bed.Plantings.RemoveAll(p => p.Id == id));
+        CloseModal();
+    }
+
+    private void ChangeModalVariety(string? varietyId)
+    {
+        if (ModalPlanting is not { } mp) return;
+        Session.Mutate(_ => mp.VarietyId = varietyId);
+    }
+
+    private void ChangeModalCount(int count)
+    {
+        if (ModalPlanting is not { } mp) return;
+        Session.Mutate(_ => mp.Count = Math.Clamp(count, 1, 36));
+    }
+
+    private void ChangeModalSpan((int W, int H) span)
+    {
+        if (Bed is null || ModalPlanting is not { } mp) return;
+        if (!SquareFootRules.CanPlace(Bed, mp.Id, mp.X, mp.Y, span.W, span.H))
+        {
+            _modalError = $"Span {span.W}×{span.H} doesn't fit here (out of bounds or overlaps another plant).";
+            return;
+        }
+        _modalError = null;
+        Session.Mutate(_ => { mp.SpanWidth = span.W; mp.SpanHeight = span.H; });
+    }
+
+    private record Rect(double Left, double Top, double Width, double Height);
+
+    public async ValueTask DisposeAsync()
+    {
+        Session.Changed -= OnSessionChanged;
+        await Session.FlushAsync();
+        if (_module is not null) { try { await _module.DisposeAsync(); } catch { } }
+    }
+}
+
