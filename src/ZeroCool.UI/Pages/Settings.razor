@@ -1,0 +1,126 @@
+@page "/settings"
+@inject SettingsRepository SettingsRepo
+@inject GardenSession Session
+
+<PageTitle>Settings</PageTitle>
+
+<h1>Settings</h1>
+
+@if (_settings is null)
+{
+    <p>Loading…</p>
+}
+else
+{
+    var zoneInfo = GrowingZoneCatalog.Get(_settings.UsdaZone);
+    var (springFrost, fallFrost) = GrowingZoneCatalog.EffectiveFrostDates(_settings, DateTime.Today.Year);
+
+    <div class="card p-3 mb-3" style="max-width: 600px;">
+        <h5 class="mb-3">Growing Zone &amp; Frost Dates</h5>
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold">USDA Hardiness Zone</label>
+            <select class="form-select" value="@(_settings.UsdaZone?.ToString() ?? "")" @onchange="OnZoneChanged">
+                <option value="">— Not set —</option>
+                @foreach (var z in GrowingZoneCatalog.Zones)
+                {
+                    <option value="@z.Zone">Zone @z.Zone (@z.MinWinterTempF / @z.MinWinterTempC)</option>
+                }
+            </select>
+            @if (zoneInfo is not null)
+            {
+                <div class="form-text">@zoneInfo.Notes</div>
+            }
+        </div>
+
+        <div class="row g-2 mb-3">
+            <div class="col-12 col-sm-6">
+                <label class="form-label small">Last spring frost <span class="text-muted">(override)</span></label>
+                <input type="date" class="form-control form-control-sm"
+                       value="@(_settings.LastSpringFrostOverride?.ToString("yyyy-MM-dd") ?? "")"
+                       @onchange="e => OnFrostChanged(isSpring: true, e)" />
+                <div class="form-text">
+                    Effective (@DateTime.Today.Year): <strong>@(springFrost?.ToString("MMM d") ?? "Frost-free")</strong>
+                </div>
+            </div>
+            <div class="col-12 col-sm-6">
+                <label class="form-label small">First fall frost <span class="text-muted">(override)</span></label>
+                <input type="date" class="form-control form-control-sm"
+                       value="@(_settings.FirstFallFrostOverride?.ToString("yyyy-MM-dd") ?? "")"
+                       @onchange="e => OnFrostChanged(isSpring: false, e)" />
+                <div class="form-text">
+                    Effective (@DateTime.Today.Year): <strong>@(fallFrost?.ToString("MMM d") ?? "Frost-free")</strong>
+                </div>
+            </div>
+        </div>
+
+        @if (_settings.LastSpringFrostOverride is not null || _settings.FirstFallFrostOverride is not null)
+        {
+            <div class="mb-3">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="ClearFrostOverridesAsync">Reset frost dates to zone defaults</button>
+            </div>
+        }
+
+        <h5 class="mb-2 mt-2">Units</h5>
+        <div class="mb-2">
+            <div class="btn-group btn-group-sm" role="group" aria-label="Units">
+                <button class="btn @(_settings.Units == UnitSystem.Imperial ? "btn-success" : "btn-outline-success")"
+                        @onclick="() => SetUnitsAsync(UnitSystem.Imperial)">Imperial (ft / in / gal)</button>
+                <button class="btn @(_settings.Units == UnitSystem.Metric ? "btn-success" : "btn-outline-success")"
+                        @onclick="() => SetUnitsAsync(UnitSystem.Metric)">Metric (m / cm / L)</button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_savedMsg))
+        {
+            <div class="small text-success mt-2">@_savedMsg</div>
+        }
+    </div>
+}
+
+@code {
+    private AppSettings? _settings;
+    private string? _savedMsg;
+
+    protected override async Task OnInitializedAsync() =>
+        _settings = await SettingsRepo.LoadAsync();
+
+    private async Task OnZoneChanged(ChangeEventArgs e)
+    {
+        if (_settings is null) return;
+        _settings.UsdaZone = int.TryParse(e.Value?.ToString(), out var z) ? z : null;
+        await SaveAsync();
+    }
+
+    private async Task OnFrostChanged(bool isSpring, ChangeEventArgs e)
+    {
+        if (_settings is null) return;
+        DateOnly? parsed = DateOnly.TryParse(e.Value?.ToString(), out var d) ? d : null;
+        if (isSpring) _settings.LastSpringFrostOverride = parsed;
+        else _settings.FirstFallFrostOverride = parsed;
+        await SaveAsync();
+    }
+
+    private async Task ClearFrostOverridesAsync()
+    {
+        if (_settings is null) return;
+        _settings.LastSpringFrostOverride = null;
+        _settings.FirstFallFrostOverride = null;
+        await SaveAsync();
+    }
+
+    private async Task SetUnitsAsync(UnitSystem units)
+    {
+        if (_settings is null) return;
+        _settings.Units = units;
+        await SaveAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_settings is null) return;
+        await Session.SaveSettingsAsync(_settings);
+        _savedMsg = "Settings saved.";
+    }
+}
+

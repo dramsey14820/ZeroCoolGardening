@@ -20,6 +20,10 @@ else
             <a href="plan/@Plan.Id" class="btn btn-sm btn-outline-secondary">← Yard</a>
             <strong class="bed-title">@Bed.Name</strong>
             <span class="badge bg-secondary">@Bed.Width × @Bed.Height ft · @Bed.Type</span>
+            <a href="settings" class="badge text-decoration-none @(Session.Settings.UsdaZone is not null ? "bg-info text-dark" : "bg-light text-dark border")"
+               title="Change USDA growing zone">
+                @(Session.Settings.UsdaZone is int z ? $"Zone {z}" : "Set Zone")
+            </a>
             <div class="btn-group btn-group-sm" role="group" aria-label="View">
                 <button class="btn @(_view == ViewMode.Plant ? "btn-success" : "btn-outline-success")" @onclick="() => _view = ViewMode.Plant">Plants</button>
                 <button class="btn @(_view == ViewMode.Soil ? "btn-success" : "btn-outline-success")" @onclick="() => _view = ViewMode.Soil">Soil</button>
@@ -166,8 +170,38 @@ else
                                 }
                             </g>
                         }
+
+                        var sfEdges = AdjacencyEngine.EvaluateSquareFoot(Bed, Session.Plants);
+                        @foreach (var edge in sfEdges)
+                        {
+                            <line x1="@edge.X1" y1="@edge.Y1" x2="@edge.X2" y2="@edge.Y2" class="adj-halo" />
+                            <line x1="@edge.X1" y1="@edge.Y1" x2="@edge.X2" y2="@edge.Y2"
+                                  class="adj-edge @(edge.Relation == AdjacencyRelation.Companion ? "good" : "bad")">
+                                <title>@edge.Tooltip</title>
+                            </line>
+                        }
                     }
                 </svg>
+                @if (_view == ViewMode.Plant)
+                {
+                    var sfEdgesSummary = AdjacencyEngine.EvaluateSquareFoot(Bed, Session.Plants);
+                    var goodCount = sfEdgesSummary.Count(e => e.Relation == AdjacencyRelation.Companion);
+                    var badCount = sfEdgesSummary.Count(e => e.Relation == AdjacencyRelation.Antagonist);
+                    @if (goodCount > 0 || badCount > 0)
+                    {
+                        <div class="adj-legend mt-1">
+                            @if (goodCount > 0)
+                            {
+                                <span class="badge bg-success">@goodCount companion @(goodCount == 1 ? "edge" : "edges")</span>
+                            }
+                            @if (badCount > 0)
+                            {
+                                <span class="badge bg-danger">@badCount conflict @(badCount == 1 ? "edge" : "edges")</span>
+                            }
+                            <span class="small text-muted">Hover a highlighted edge for details.</span>
+                        </div>
+                    }
+                }
                 <p class="hint">
                     Tap a plant in the palette, then tap a cell to plant it. Drag planted items to move them, or tap one to view details, health info, and warnings.
                 </p>
@@ -190,6 +224,13 @@ else
                         var c = cat;
                         <button class="btn btn-xs @(_categoryFilter == c ? "btn-success" : "btn-outline-secondary")" @onclick="() => _categoryFilter = c">@c</button>
                     }
+                    @if (Session.Settings.UsdaZone is int uz)
+                    {
+                        <button class="btn btn-xs @(_zoneOnly ? "btn-info text-dark" : "btn-outline-info")"
+                                @onclick="() => _zoneOnly = !_zoneOnly">
+                            Zone @uz only
+                        </button>
+                    }
                 </div>
 
                 <div class="palette-list">
@@ -198,6 +239,7 @@ else
                         var p = plant;
                         var sf = PlantResolver.RecommendedSquareFoot(p.Spacing);
                         var isArmedGeneric = _armedPlantId == p.Id && _armedVarietyId is null;
+                        var zoneOk = GrowingZoneCatalog.IsSuitable(p.Zones, Session.Settings.UsdaZone);
                         <div class="plant-card @(isArmedGeneric ? "armed" : "")">
                             <div class="plant-card-top" @onclick="() => Arm(p.Id, null)">
                                 <PlantIcon Icon="@p.Icon" FallbackKey="@p.Id" Alt="@p.Name" Size="26" />
@@ -207,6 +249,10 @@ else
                                         @if (p.Warnings is { Count: > 0 })
                                         {
                                             <span class="badge bg-warning text-dark ms-1" title="Has safety warnings">!</span>
+                                        }
+                                        @if (!zoneOk && Session.Settings.UsdaZone is int zWarn)
+                                        {
+                                            <span class="badge bg-secondary ms-1" title="Outside USDA Zone @zWarn">Zone @zWarn?</span>
                                         }
                                     </div>
                                     <div class="small text-muted">
@@ -248,6 +294,7 @@ else
     <PlantInfoModal Info="@ModalInfo"
                     Planting="@ModalPlanting"
                     Catalog="@Session.Plants"
+                    Settings="@Session.Settings"
                     ShowSpanControls="@(Bed.Type == BedType.SquareFoot)"
                     PlacementError="@_modalError"
                     OnClose="CloseModal"
@@ -274,6 +321,7 @@ else
     private string? _message;
     private string _search = "";
     private PlantCategory? _categoryFilter;
+    private bool _zoneOnly;
 
     // armed plant for tap-to-place
     private string? _armedPlantId;
@@ -307,6 +355,7 @@ else
 
     private IEnumerable<Plant> FilteredPlants => Session.Plants.Where(p =>
         (_categoryFilter is null || p.Category == _categoryFilter) &&
+        (!_zoneOnly || GrowingZoneCatalog.IsSuitable(p.Zones, Session.Settings.UsdaZone)) &&
         (string.IsNullOrWhiteSpace(_search) ||
          p.Name.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
          p.Varieties.Any(v => v.Name.Contains(_search, StringComparison.OrdinalIgnoreCase))));

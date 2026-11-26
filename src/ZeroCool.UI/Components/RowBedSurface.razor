@@ -139,6 +139,16 @@
                 }
             </g>
         }
+
+        var rowEdges = AdjacencyEngine.EvaluateRows(Bed, Session.Plants, rowLayout);
+        @foreach (var edge in rowEdges)
+        {
+            <line x1="@edge.X1" y1="@edge.Y1" x2="@edge.X2" y2="@edge.Y2" class="adj-halo" />
+            <line x1="@edge.X1" y1="@edge.Y1" x2="@edge.X2" y2="@edge.Y2"
+                  class="adj-edge @(edge.Relation == AdjacencyRelation.Companion ? "good" : "bad")">
+                <title>@edge.Tooltip</title>
+            </line>
+        }
     }
 </svg>
 

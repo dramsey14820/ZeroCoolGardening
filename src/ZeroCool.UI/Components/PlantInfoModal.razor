@@ -108,7 +108,16 @@
                     }
                     @if (Info.Zones.Count > 0)
                     {
-                        <div><strong>USDA Zones:</strong> @Info.Zones.Min()–@Info.Zones.Max()</div>
+                        var zoneOk = GrowingZoneCatalog.IsSuitable(Info.Zones, Settings?.UsdaZone);
+                        <div>
+                            <strong>USDA Zones:</strong> @Info.Zones.Min()–@Info.Zones.Max()
+                            @if (Settings?.UsdaZone is int uz)
+                            {
+                                <span class="badge @(zoneOk ? "bg-success" : "bg-warning text-dark") ms-1">
+                                    @(zoneOk ? $"Good for Zone {uz}" : $"Outside Zone {uz}")
+                                </span>
+                            }
+                        </div>
                     }
                     @{
                         var sf = Info.SquareFootDefault;
@@ -190,6 +199,7 @@
     [Parameter] public ResolvedPlant? Info { get; set; }
     [Parameter] public Planting? Planting { get; set; }
     [Parameter] public IReadOnlyList<Plant> Catalog { get; set; } = [];
+    [Parameter] public AppSettings? Settings { get; set; }
     [Parameter] public bool ShowSpanControls { get; set; } = true;
     [Parameter] public string? PlacementError { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }

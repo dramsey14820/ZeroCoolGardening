@@ -44,6 +44,13 @@ public sealed class GardenSession(PlanRepository plans, PlantCatalogRepository c
 
     public Task FlushAsync() => _saver?.FlushAsync() ?? Task.CompletedTask;
 
+    public async Task SaveSettingsAsync(AppSettings updated)
+    {
+        await settings.SaveAsync(updated);
+        Settings = updated;
+        Changed?.Invoke();
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_saver is not null) await _saver.DisposeAsync();

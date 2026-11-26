@@ -17,6 +17,10 @@
 .row-emoji { font-size: .32px; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
 .row-label { font-size: .15px; fill: #1c3a1f; text-anchor: middle; dominant-baseline: middle; font-weight: 600; pointer-events: none; }
 .row-empty { font-size: .16px; fill: #556; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.adj-halo { stroke: rgba(255, 255, 255, .85); stroke-width: .15; stroke-linecap: round; pointer-events: none; }
+.adj-edge { stroke-width: .09; stroke-linecap: round; cursor: help; }
+.adj-edge.good { stroke: #198754; }
+.adj-edge.bad { stroke: #dc3545; }
 .soil-banner { font-size: .35px; fill: #fff; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: .05px; pointer-events: none; }
 .soil-sub { font-size: .2px; fill: #fff; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: .03px; pointer-events: none; }
 .hint { font-size: .82rem; color: #666; margin: .45rem 0 0; }
