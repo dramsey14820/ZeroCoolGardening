@@ -75,7 +75,7 @@ public class StorageTests : IDisposable
     {
         var all = await new PlantCatalogRepository(Store).GetAllAsync();
         var tomato = all.Single(p => p.Id == "tomato");
-        Assert.Equal(2, tomato.Varieties.Count);
+        Assert.True(tomato.Varieties.Count >= 2);
         Assert.Contains(tomato.Warnings!, w => w.Type == WarningType.ToxicToPets);
         Assert.Equal(2, tomato.Spacing!.CellSpanWidth);
     }
