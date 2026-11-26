@@ -65,24 +65,27 @@
                             </div>
                         }
                         <div class="row g-2 align-items-end">
-                            <div class="col-4">
-                                <label class="form-label small mb-1">Plants / spot</label>
-                                <input type="number" class="form-control form-control-sm" min="1" max="36"
+                            <div class="@(ShowSpanControls ? "col-4" : "col-6")">
+                                <label class="form-label small mb-1">@(ShowSpanControls ? "Plants / spot" : "Plant count")</label>
+                                <input type="number" class="form-control form-control-sm" min="1" max="200"
                                        value="@(Planting.Count ?? Info.SquareFootDefault.PlantsPerSquareFoot)"
                                        @onchange="e => OnCountChanged.InvokeAsync(ParsePositive(e, Planting.Count ?? 1))" />
                             </div>
-                            <div class="col-4">
-                                <label class="form-label small mb-1">Span W (cells)</label>
-                                <input type="number" class="form-control form-control-sm" min="1" max="12"
-                                       value="@Planting.SpanWidth"
-                                       @onchange="e => OnSpanChanged.InvokeAsync((ParsePositive(e, Planting.SpanWidth), Planting.SpanHeight))" />
-                            </div>
-                            <div class="col-4">
-                                <label class="form-label small mb-1">Span H (cells)</label>
-                                <input type="number" class="form-control form-control-sm" min="1" max="12"
-                                       value="@Planting.SpanHeight"
-                                       @onchange="e => OnSpanChanged.InvokeAsync((Planting.SpanWidth, ParsePositive(e, Planting.SpanHeight)))" />
-                            </div>
+                            @if (ShowSpanControls)
+                            {
+                                <div class="col-4">
+                                    <label class="form-label small mb-1">Span W (cells)</label>
+                                    <input type="number" class="form-control form-control-sm" min="1" max="12"
+                                           value="@Planting.SpanWidth"
+                                           @onchange="e => OnSpanChanged.InvokeAsync((ParsePositive(e, Planting.SpanWidth), Planting.SpanHeight))" />
+                                </div>
+                                <div class="col-4">
+                                    <label class="form-label small mb-1">Span H (cells)</label>
+                                    <input type="number" class="form-control form-control-sm" min="1" max="12"
+                                           value="@Planting.SpanHeight"
+                                           @onchange="e => OnSpanChanged.InvokeAsync((Planting.SpanWidth, ParsePositive(e, Planting.SpanHeight)))" />
+                                </div>
+                            }
                         </div>
                         <div class="mt-2 d-flex justify-content-end">
                             <button class="btn btn-sm btn-outline-danger" @onclick="OnRemovePlanting">Remove from bed</button>
@@ -187,6 +190,7 @@
     [Parameter] public ResolvedPlant? Info { get; set; }
     [Parameter] public Planting? Planting { get; set; }
     [Parameter] public IReadOnlyList<Plant> Catalog { get; set; } = [];
+    [Parameter] public bool ShowSpanControls { get; set; } = true;
     [Parameter] public string? PlacementError { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnRemovePlanting { get; set; }

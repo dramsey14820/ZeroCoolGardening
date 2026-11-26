@@ -1,0 +1,237 @@
+@{
+    var rowLayout = RowLayoutEngine.Compute(Bed.Width, Bed.Height, Bed.BetweenRowsInches, Bed.InRowSpacingInches, Bed.RowOrientation);
+    var horiz = Bed.RowOrientation == RowOrientation.Horizontal;
+    var bandSize = Math.Min(rowLayout.BetweenRowsInches / 12.0, (horiz ? Bed.Height : Bed.Width) / (double)rowLayout.RowCount);
+}
+
+<div class="row-controls">
+    <div class="row g-2 align-items-end">
+        <div class="col-6 col-sm-3">
+            <label class="form-label small mb-1">In-row spacing (in)</label>
+            <input type="number" step="0.5" min="1" max="120" class="form-control form-control-sm"
+                   value="@rowLayout.InRowInches"
+                   @onchange="e => OnSpacingChanged(ParseDouble(e, rowLayout.InRowInches), Bed.BetweenRowsInches)" />
+        </div>
+        <div class="col-6 col-sm-3">
+            <label class="form-label small mb-1">Between rows (in)</label>
+            <input type="number" step="0.5" min="1" max="120" class="form-control form-control-sm"
+                   value="@rowLayout.BetweenRowsInches"
+                   @onchange="e => OnSpacingChanged(Bed.InRowSpacingInches, ParseDouble(e, rowLayout.BetweenRowsInches))" />
+        </div>
+        <div class="col-6 col-sm-3">
+            <label class="form-label small mb-1">Seed depth (in)</label>
+            <input type="number" step="0.25" min="0" max="12" class="form-control form-control-sm" placeholder="optional"
+                   value="@Bed.SeedDepthInches"
+                   @onchange="e => Session.Mutate(_ => Bed.SeedDepthInches = ParseNullableDouble(e))" />
+        </div>
+        <div class="col-6 col-sm-3">
+            <label class="form-label small mb-1">Row direction</label>
+            <select class="form-select form-select-sm" value="@Bed.RowOrientation"
+                    @onchange="e => Session.Mutate(_ => Bed.RowOrientation = Enum.Parse<RowOrientation>(e.Value!.ToString()!))">
+                <option value="@RowOrientation.Horizontal">Horizontal</option>
+                <option value="@RowOrientation.Vertical">Vertical</option>
+            </select>
+        </div>
+    </div>
+    <div class="row-summary mt-2">
+        <span class="badge bg-success">@rowLayout.RowCount @(rowLayout.RowCount == 1 ? "row" : "rows") × @rowLayout.PlantsPerRow plants/row = @rowLayout.TotalPlants plants</span>
+        @if (Bed.SeedDepthInches is > 0)
+        {
+            <span class="badge bg-secondary">Depth: @Bed.SeedDepthInches"</span>
+        }
+        @if (ArmedPlant is not null)
+        {
+            <button class="btn btn-xs btn-outline-primary ms-auto" @onclick="() => ApplyPlantSpacing(ArmedPlant)">
+                Use @ArmedPlant.ShortName packet spacing
+            </button>
+            <button class="btn btn-xs btn-success" @onclick="() => FillAllRows(ArmedPlant, rowLayout)">
+                Fill all @rowLayout.RowCount rows
+            </button>
+        }
+    </div>
+</div>
+
+<svg class="row-svg" viewBox="0 0 @Bed.Width @Bed.Height">
+    <rect x="0" y="0" width="@Bed.Width" height="@Bed.Height"
+          fill="@(ShowSoil ? SoilCatalog.ColorFor(Bed.Soil) : "#d9ecd0")" />
+
+    @if (ShowSoil)
+    {
+        <SvgText X="@(Bed.Width / 2.0)" Y="@(Bed.Height / 2.0)" Class="soil-banner">
+            @(string.IsNullOrEmpty(Bed.Soil) ? "Soil not set" : Bed.Soil)
+        </SvgText>
+        @if (!string.IsNullOrEmpty(Bed.Fertilizer))
+        {
+            <SvgText X="@(Bed.Width / 2.0)" Y="@(Bed.Height / 2.0 + 0.55)" Class="soil-sub">
+                Fertilizer: @Bed.Fertilizer
+            </SvgText>
+        }
+    }
+    else
+    {
+        @for (var r = 0; r < rowLayout.RowCount; r++)
+        {
+            var rowIdx = r;
+            var pos = rowLayout.RowPositionsFeet[rowIdx];
+            var planting = Bed.Plantings.FirstOrDefault(p => p.Y == rowIdx);
+            var info = planting is null ? null : PlantResolver.Resolve(Session.Plants, planting.PlantId, planting.VarietyId);
+            var svgUrl = info is null ? null : IconCatalog.ResolveSvgUrl(info.Icon, planting!.PlantId);
+            var stripH = Math.Min(bandSize * 0.82, 0.9);
+            var iconSz = Math.Clamp(Math.Min(stripH * 0.65, rowLayout.InRowInches / 12.0 * 0.72), 0.16, 0.65);
+
+            <g class="row-band @(planting is not null ? "planted" : ArmedPlant is not null ? "armable" : "")"
+               @onclick="() => OnRowClick(rowIdx, planting, rowLayout)">
+                @if (horiz)
+                {
+                    <rect x="0.08" y="@(pos - stripH / 2.0)" width="@(Bed.Width - 0.16)" height="@stripH" rx="0.08" class="band-rect" />
+                    <line x1="0.15" x2="@(Bed.Width - 0.15)" y1="@pos" y2="@pos" class="furrow" />
+                }
+                else
+                {
+                    <rect x="@(pos - stripH / 2.0)" y="0.08" width="@stripH" height="@(Bed.Height - 0.16)" rx="0.08" class="band-rect" />
+                    <line x1="@pos" x2="@pos" y1="0.15" y2="@(Bed.Height - 0.15)" class="furrow" />
+                }
+
+                @if (planting is not null && info is not null)
+                {
+                    var plantPositions = rowLayout.PlantPositionsFeet;
+                    var maxIcons = Math.Min(plantPositions.Count, 24);
+                    @for (var i = 0; i < maxIcons; i++)
+                    {
+                        var pPos = plantPositions[i];
+                        var cx = horiz ? pPos : pos;
+                        var cy = horiz ? pos : pPos;
+                        @if (svgUrl is not null)
+                        {
+                            <image href="@svgUrl" x="@(cx - iconSz / 2.0)" y="@(cy - iconSz / 2.0)" width="@iconSz" height="@iconSz" pointer-events="none" />
+                        }
+                        else
+                        {
+                            <SvgText X="@cx" Y="@cy" Class="row-emoji">@info.Icon</SvgText>
+                        }
+                    }
+
+                    @if (horiz)
+                    {
+                        <SvgText X="@(Bed.Width / 2.0)" Y="@(pos + stripH * 0.36)" Class="row-label">
+                            Row @(rowIdx + 1): @info.ShortName (×@(planting.Count ?? rowLayout.PlantsPerRow))
+                        </SvgText>
+                    }
+                    else
+                    {
+                        <SvgText X="@pos" Y="@(Bed.Height - 0.22)" Class="row-label">
+                            R@(rowIdx + 1): @info.ShortName
+                        </SvgText>
+                    }
+                }
+                else
+                {
+                    @if (horiz)
+                    {
+                        <SvgText X="@(Bed.Width / 2.0)" Y="@pos" Class="row-empty">
+                            Row @(rowIdx + 1) @(ArmedPlant is not null ? $"+ tap to plant {ArmedPlant.ShortName}" : "(empty)")
+                        </SvgText>
+                    }
+                    else
+                    {
+                        <SvgText X="@pos" Y="@(Bed.Height / 2.0)" Class="row-empty">R@(rowIdx + 1)</SvgText>
+                    }
+                }
+            </g>
+        }
+    }
+</svg>
+
+<p class="hint">
+    Enter seed-packet spacing above to auto-calculate rows and plants per row. Tap a row to plant your selected variety, or tap a planted row for details.
+</p>
+
+@code {
+    [Parameter, EditorRequired] public Bed Bed { get; set; } = default!;
+    [Parameter, EditorRequired] public GardenSession Session { get; set; } = default!;
+    [Parameter] public bool ShowSoil { get; set; }
+    [Parameter] public ResolvedPlant? ArmedPlant { get; set; }
+    [Parameter] public EventCallback<string> OnOpenPlanting { get; set; }
+
+    private void OnSpacingChanged(double? inRow, double? betweenRows)
+    {
+        Session.Mutate(_ =>
+        {
+            Bed.InRowSpacingInches = inRow;
+            Bed.BetweenRowsInches = betweenRows;
+            var layout = RowLayoutEngine.Compute(Bed.Width, Bed.Height, Bed.BetweenRowsInches, Bed.InRowSpacingInches, Bed.RowOrientation);
+            Bed.Plantings.RemoveAll(p => p.Y >= layout.RowCount);
+            foreach (var p in Bed.Plantings) p.Count = layout.PlantsPerRow;
+        });
+    }
+
+    private void ApplyPlantSpacing(ResolvedPlant plant)
+    {
+        var sp = plant.EffectiveSpacing;
+        OnSpacingChanged(sp.InRowInches ?? RowLayoutEngine.DefaultInRowInches, sp.BetweenRowsInches ?? RowLayoutEngine.DefaultBetweenRowsInches);
+    }
+
+    private void FillAllRows(ResolvedPlant plant, RowLayoutResult layout)
+    {
+        Session.Mutate(_ =>
+        {
+            // If bed doesn't have explicit spacing yet, adopt the plant's packet spacing first
+            if (Bed.InRowSpacingInches is null && plant.EffectiveSpacing.InRowInches is > 0)
+                Bed.InRowSpacingInches = plant.EffectiveSpacing.InRowInches;
+            if (Bed.BetweenRowsInches is null && plant.EffectiveSpacing.BetweenRowsInches is > 0)
+                Bed.BetweenRowsInches = plant.EffectiveSpacing.BetweenRowsInches;
+
+            var updated = RowLayoutEngine.Compute(Bed.Width, Bed.Height, Bed.BetweenRowsInches, Bed.InRowSpacingInches, Bed.RowOrientation);
+            Bed.Plantings.Clear();
+            for (var r = 0; r < updated.RowCount; r++)
+            {
+                Bed.Plantings.Add(new Planting
+                {
+                    PlantId = plant.PlantId,
+                    VarietyId = plant.VarietyId,
+                    X = 0,
+                    Y = r,
+                    Count = updated.PlantsPerRow
+                });
+            }
+        });
+    }
+
+    private async Task OnRowClick(int rowIndex, Planting? existing, RowLayoutResult layout)
+    {
+        if (existing is not null)
+        {
+            await OnOpenPlanting.InvokeAsync(existing.Id);
+            return;
+        }
+        if (ArmedPlant is null) return;
+
+        var plant = ArmedPlant;
+        Session.Mutate(_ =>
+        {
+            // Auto-configure spacing on first planting if the user hasn't set spacing yet
+            if (Bed.Plantings.Count == 0 && Bed.InRowSpacingInches is null && Bed.BetweenRowsInches is null)
+            {
+                Bed.InRowSpacingInches = plant.EffectiveSpacing.InRowInches;
+                Bed.BetweenRowsInches = plant.EffectiveSpacing.BetweenRowsInches;
+                layout = RowLayoutEngine.Compute(Bed.Width, Bed.Height, Bed.BetweenRowsInches, Bed.InRowSpacingInches, Bed.RowOrientation);
+            }
+            var targetRow = Math.Min(rowIndex, layout.RowCount - 1);
+            Bed.Plantings.RemoveAll(p => p.Y == targetRow);
+            Bed.Plantings.Add(new Planting
+            {
+                PlantId = plant.PlantId,
+                VarietyId = plant.VarietyId,
+                X = 0,
+                Y = targetRow,
+                Count = layout.PlantsPerRow
+            });
+        });
+    }
+
+    private static double ParseDouble(ChangeEventArgs e, double fallback) =>
+        double.TryParse(e.Value?.ToString(), out var v) && v > 0 ? v : fallback;
+
+    private static double? ParseNullableDouble(ChangeEventArgs e) =>
+        double.TryParse(e.Value?.ToString(), out var v) && v >= 0 ? v : null;
+}

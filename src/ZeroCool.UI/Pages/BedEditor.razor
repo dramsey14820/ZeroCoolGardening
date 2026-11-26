@@ -52,7 +52,19 @@ else
 
         <div class="workspace">
             <div class="canvas-wrap">
-                <svg @ref="_svg" class="bed-svg" viewBox="0 0 @Bed.Width @Bed.Height"
+                @if (Bed.Type == BedType.Row)
+                {
+                    <RowBedSurface Bed="@Bed" Session="@Session" ShowSoil="@(_view == ViewMode.Soil)"
+                                   ArmedPlant="@ArmedResolved" OnOpenPlanting="OpenExistingPlanting" />
+                }
+                else if (Bed.Type == BedType.Container)
+                {
+                    <ContainerBedSurface Bed="@Bed" Session="@Session" ShowSoil="@(_view == ViewMode.Soil)"
+                                         ArmedPlant="@ArmedResolved" OnOpenPlanting="OpenExistingPlanting" />
+                }
+                else
+                {
+                    <svg @ref="_svg" class="bed-svg" viewBox="0 0 @Bed.Width @Bed.Height"
                      @onpointerdown="OnGridDown" @onpointermove="OnMove" @onpointerup="OnUp" @onpointercancel="OnUp">
                     @for (var y = 0; y < Bed.Height; y++)
                     {
@@ -159,6 +171,7 @@ else
                 <p class="hint">
                     Tap a plant in the palette, then tap a cell to plant it. Drag planted items to move them, or tap one to view details, health info, and warnings.
                 </p>
+                }
             </div>
 
             <div class="palette @(_paletteOpen ? "open" : "")">
@@ -235,6 +248,7 @@ else
     <PlantInfoModal Info="@ModalInfo"
                     Planting="@ModalPlanting"
                     Catalog="@Session.Plants"
+                    ShowSpanControls="@(Bed.Type == BedType.SquareFoot)"
                     PlacementError="@_modalError"
                     OnClose="CloseModal"
                     OnRemovePlanting="RemoveModalPlanting"
@@ -278,6 +292,9 @@ else
     private string? _previewVarietyId;
     private string? _modalError;
 
+    private ResolvedPlant? ArmedResolved =>
+        _armedPlantId is null ? null : PlantResolver.Resolve(Session.Plants, _armedPlantId, _armedVarietyId);
+
     private Planting? ModalPlanting => Bed?.Plantings.FirstOrDefault(p => p.Id == _modalPlantingId);
 
     private ResolvedPlant? ModalInfo =>
@@ -320,11 +337,52 @@ else
         _armedVarietyId = null;
     }
 
+    private void OpenExistingPlanting(string plantingId)
+    {
+        _modalPlantingId = plantingId;
+        _previewPlantId = null;
+        _modalError = null;
+    }
+
     private void AutoPlace(string plantId, string? varietyId)
     {
         if (Bed is null) return;
         var info = PlantResolver.Resolve(Session.Plants, plantId, varietyId);
         if (info is null) return;
+
+        if (Bed.Type == BedType.Container)
+        {
+            var vol = Bed.ContainerVolumeLiters is > 0 ? Bed.ContainerVolumeLiters.Value : ContainerGuidance.DefaultVolumeLiters;
+            var rec = ContainerGuidance.Recommend(vol, info.EffectiveSpacing);
+            var bed = Bed;
+            Session.Mutate(_ =>
+            {
+                bed.Plantings.Clear();
+                bed.Plantings.Add(new Planting { PlantId = info.PlantId, VarietyId = info.VarietyId, X = 0, Y = 0, Count = Math.Max(1, rec.RecommendedPlants) });
+            });
+            _message = rec.IsTooSmall ? rec.Summary : null;
+            return;
+        }
+
+        if (Bed.Type == BedType.Row)
+        {
+            var bed = Bed;
+            var layout = RowLayoutEngine.Compute(bed.Width, bed.Height, bed.BetweenRowsInches ?? info.EffectiveSpacing.BetweenRowsInches, bed.InRowSpacingInches ?? info.EffectiveSpacing.InRowInches, bed.RowOrientation);
+            var nextRow = Enumerable.Range(0, layout.RowCount).FirstOrDefault(r => bed.Plantings.All(p => p.Y != r), -1);
+            if (nextRow < 0) { _message = $"All {layout.RowCount} rows are planted."; return; }
+            _message = null;
+            Session.Mutate(_ =>
+            {
+                if (bed.Plantings.Count == 0 && bed.InRowSpacingInches is null && bed.BetweenRowsInches is null)
+                {
+                    bed.InRowSpacingInches = info.EffectiveSpacing.InRowInches;
+                    bed.BetweenRowsInches = info.EffectiveSpacing.BetweenRowsInches;
+                }
+                bed.Plantings.Add(new Planting { PlantId = info.PlantId, VarietyId = info.VarietyId, X = 0, Y = nextRow, Count = layout.PlantsPerRow });
+            });
+            return;
+        }
+
         var (perSqFt, spanW, spanH) = info.SquareFootDefault;
         var spot = SquareFootRules.FindFreeSpot(Bed, spanW, spanH);
         if (spot is null)
@@ -459,7 +517,7 @@ else
     private void ChangeModalCount(int count)
     {
         if (ModalPlanting is not { } mp) return;
-        Session.Mutate(_ => mp.Count = Math.Clamp(count, 1, 36));
+        Session.Mutate(_ => mp.Count = Math.Clamp(count, 1, 200));
     }
 
     private void ChangeModalSpan((int W, int H) span)

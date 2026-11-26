@@ -1,0 +1,22 @@
+.container-controls {
+    background: #f6faf4; border: 1px solid #d5e6cf; border-radius: .45rem;
+    padding: .65rem .75rem; margin-bottom: .6rem;
+}
+.guidance { font-size: .85rem; padding: .35rem .6rem; border-radius: .35rem; }
+.guidance.ok { background: #e3f5e8; color: #146c43; }
+.guidance.too-small { background: #fff3cd; color: #664d03; border: 1px solid #ffecb5; }
+
+.container-stage { max-width: 420px; margin: 0 auto; }
+.container-svg { width: 100%; height: auto; display: block; cursor: pointer; }
+.pot-rim { fill: #c26d43; stroke: #8c4727; stroke-width: .18; }
+.bag-rim { fill: #3f464d; stroke: #222; stroke-width: .18; stroke-dasharray: .4 .2; }
+.pot-soil { stroke: rgba(0, 0, 0, .2); stroke-width: .08; }
+.pot-emoji { font-size: 1.4px; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.pot-pill { fill: rgba(25, 135, 84, .92); pointer-events: none; }
+.pot-label { font-size: .46px; fill: #fff; text-anchor: middle; dominant-baseline: middle; font-weight: 600; pointer-events: none; }
+.pot-empty { font-size: .5px; fill: #fff; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.pot-empty-sub { font-size: .36px; fill: rgba(255, 255, 255, .82); text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.soil-banner { font-size: .6px; fill: #fff; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: .08px; pointer-events: none; }
+.soil-sub { font-size: .4px; fill: #fff; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: .05px; pointer-events: none; }
+.hint { font-size: .82rem; color: #666; margin: .45rem 0 0; }
+

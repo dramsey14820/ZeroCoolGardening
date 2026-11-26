@@ -44,6 +44,11 @@ public class Bed
     public int RotationDegrees { get; set; }
     public string? Soil { get; set; }
     public string? Fertilizer { get; set; }
+    public RowOrientation RowOrientation { get; set; } = RowOrientation.Horizontal;
+    public double? InRowSpacingInches { get; set; }
+    public double? BetweenRowsInches { get; set; }
+    public double? SeedDepthInches { get; set; }
+    public ContainerShape ContainerShape { get; set; } = ContainerShape.Round;
     public double? ContainerVolumeLiters { get; set; }
     public List<Planting> Plantings { get; set; } = new();
 }

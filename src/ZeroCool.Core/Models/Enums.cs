@@ -2,6 +2,10 @@ namespace ZeroCool.Core.Models;
 
 public enum BedType { Row, SquareFoot, Container }
 
+public enum RowOrientation { Horizontal, Vertical }
+
+public enum ContainerShape { Round, Rectangular, GrowBag }
+
 public enum PlantCategory { Vegetable, Herb, Fruit, Flower, Ornamental, Groundcover, Vine }
 
 public enum WarningType { ToxicToPets, ToxicToHumans, ToxicToChildren, SkinIrritant, Allergen, Invasive, Thorny, UnsafeParts, Other }

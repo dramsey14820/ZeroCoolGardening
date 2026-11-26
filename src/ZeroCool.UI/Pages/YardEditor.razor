@@ -68,9 +68,17 @@ else
                                   fill="@(_view == ViewMode.Soil ? SoilCatalog.ColorFor(bed.Soil) : "#7fb069")" class="bed" />
                             @if (bed.Type == BedType.Row)
                             {
-                                @for (var r = 1; r < bed.Height; r++)
+                                var rl = RowLayoutEngine.Compute(bed.Width, bed.Height, bed.BetweenRowsInches, bed.InRowSpacingInches, bed.RowOrientation);
+                                @foreach (var pos in rl.RowPositionsFeet)
                                 {
-                                    <line x1="@(bed.X + 0.2)" x2="@(bed.X + bed.Width - 0.2)" y1="@(bed.Y + r)" y2="@(bed.Y + r)" class="rowline" />
+                                    @if (bed.RowOrientation == RowOrientation.Horizontal)
+                                    {
+                                        <line x1="@(bed.X + 0.15)" x2="@(bed.X + bed.Width - 0.15)" y1="@(bed.Y + pos)" y2="@(bed.Y + pos)" class="rowline" />
+                                    }
+                                    else
+                                    {
+                                        <line x1="@(bed.X + pos)" x2="@(bed.X + pos)" y1="@(bed.Y + 0.15)" y2="@(bed.Y + bed.Height - 0.15)" class="rowline" />
+                                    }
                                 }
                             }
                             else if (bed.Type == BedType.SquareFoot)
@@ -86,22 +94,63 @@ else
                             }
                             @if (_view == ViewMode.Plant && bed.Plantings.Count > 0)
                             {
-                                @foreach (var pl in bed.Plantings)
+                                @if (bed.Type == BedType.Container)
                                 {
+                                    var pl = bed.Plantings[0];
                                     var info = PlantResolver.Resolve(Session.Plants, pl.PlantId, pl.VarietyId);
-                                    var sw = Math.Max(1, pl.SpanWidth);
-                                    var sh = Math.Max(1, pl.SpanHeight);
                                     var svgUrl = IconCatalog.ResolveSvgUrl(info?.Icon, pl.PlantId);
-                                    var iconSz = Math.Min(sw, sh) * 0.72;
-                                    var px = bed.X + pl.X + (sw - iconSz) / 2.0;
-                                    var py = bed.Y + pl.Y + (sh - iconSz) / 2.0;
+                                    var iconSz = Math.Min(bed.Width, bed.Height) * 0.62;
                                     @if (svgUrl is not null)
                                     {
-                                        <image href="@svgUrl" x="@px" y="@py" width="@iconSz" height="@iconSz" pointer-events="none" />
+                                        <image href="@svgUrl" x="@(bed.X + (bed.Width - iconSz) / 2.0)" y="@(bed.Y + (bed.Height - iconSz) / 2.0)" width="@iconSz" height="@iconSz" pointer-events="none" />
                                     }
                                     else
                                     {
-                                        <SvgText X="@(bed.X + pl.X + sw / 2.0)" Y="@(bed.Y + pl.Y + sh / 2.0)" Class="label">@(info?.Icon ?? "🌱")</SvgText>
+                                        <SvgText X="@(bed.X + bed.Width / 2.0)" Y="@(bed.Y + bed.Height / 2.0)" Class="label">@(info?.Icon ?? "🌱")</SvgText>
+                                    }
+                                }
+                                else if (bed.Type == BedType.Row)
+                                {
+                                    var rl = RowLayoutEngine.Compute(bed.Width, bed.Height, bed.BetweenRowsInches, bed.InRowSpacingInches, bed.RowOrientation);
+                                    var horiz = bed.RowOrientation == RowOrientation.Horizontal;
+                                    @foreach (var pl in bed.Plantings)
+                                    {
+                                        if (pl.Y < 0 || pl.Y >= rl.RowPositionsFeet.Count) continue;
+                                        var info = PlantResolver.Resolve(Session.Plants, pl.PlantId, pl.VarietyId);
+                                        var svgUrl = IconCatalog.ResolveSvgUrl(info?.Icon, pl.PlantId);
+                                        var pos = rl.RowPositionsFeet[pl.Y];
+                                        var iconSz = Math.Clamp(Math.Min(rl.BetweenRowsInches / 12.0 * 0.65, 0.75), 0.35, 0.75);
+                                        var cx = horiz ? bed.X + bed.Width / 2.0 : bed.X + pos;
+                                        var cy = horiz ? bed.Y + pos : bed.Y + bed.Height / 2.0;
+                                        @if (svgUrl is not null)
+                                        {
+                                            <image href="@svgUrl" x="@(cx - iconSz / 2.0)" y="@(cy - iconSz / 2.0)" width="@iconSz" height="@iconSz" pointer-events="none" />
+                                        }
+                                        else
+                                        {
+                                            <SvgText X="@cx" Y="@cy" Class="label">@(info?.Icon ?? "🌱")</SvgText>
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    @foreach (var pl in bed.Plantings)
+                                    {
+                                        var info = PlantResolver.Resolve(Session.Plants, pl.PlantId, pl.VarietyId);
+                                        var sw = Math.Max(1, pl.SpanWidth);
+                                        var sh = Math.Max(1, pl.SpanHeight);
+                                        var svgUrl = IconCatalog.ResolveSvgUrl(info?.Icon, pl.PlantId);
+                                        var iconSz = Math.Min(sw, sh) * 0.72;
+                                        var px = bed.X + pl.X + (sw - iconSz) / 2.0;
+                                        var py = bed.Y + pl.Y + (sh - iconSz) / 2.0;
+                                        @if (svgUrl is not null)
+                                        {
+                                            <image href="@svgUrl" x="@px" y="@py" width="@iconSz" height="@iconSz" pointer-events="none" />
+                                        }
+                                        else
+                                        {
+                                            <SvgText X="@(bed.X + pl.X + sw / 2.0)" Y="@(bed.Y + pl.Y + sh / 2.0)" Class="label">@(info?.Icon ?? "🌱")</SvgText>
+                                        }
                                     }
                                 }
                             }
@@ -355,7 +404,8 @@ else
                 p.Beds.Add(new Bed
                 {
                     Id = newId, Name = $"Bed {p.Beds.Count + 1}", X = spot.Value.X, Y = spot.Value.Y, Width = w, Height = h,
-                    Type = kind switch { AddKind.Row => BedType.Row, AddKind.Container => BedType.Container, _ => BedType.SquareFoot }
+                    Type = kind switch { AddKind.Row => BedType.Row, AddKind.Container => BedType.Container, _ => BedType.SquareFoot },
+                    ContainerVolumeLiters = kind == AddKind.Container ? ContainerGuidance.DefaultVolumeLiters : null
                 });
         });
         _selectedId = newId;

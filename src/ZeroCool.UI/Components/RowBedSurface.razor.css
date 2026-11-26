@@ -1,0 +1,23 @@
+.row-controls {
+    background: #f6faf4; border: 1px solid #d5e6cf; border-radius: .45rem;
+    padding: .65rem .75rem; margin-bottom: .6rem;
+}
+.row-summary { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.btn-xs { padding: .15rem .5rem; font-size: .78rem; }
+
+.row-svg {
+    width: 100%; height: auto; display: block;
+    background: #5c4033; border: 3px solid #4a3728; border-radius: .25rem;
+}
+.row-band { cursor: pointer; }
+.band-rect { fill: rgba(255, 255, 255, .35); stroke: rgba(74, 55, 40, .28); stroke-width: .025; }
+.row-band.planted .band-rect { fill: #f5fbf2; stroke: #4b8b3b; stroke-width: .035; }
+.row-band.armable:hover .band-rect { fill: #e7f6e9; stroke: #198754; stroke-width: .04; }
+.furrow { stroke: rgba(92, 64, 51, .35); stroke-width: .03; stroke-dasharray: .12 .1; pointer-events: none; }
+.row-emoji { font-size: .32px; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.row-label { font-size: .15px; fill: #1c3a1f; text-anchor: middle; dominant-baseline: middle; font-weight: 600; pointer-events: none; }
+.row-empty { font-size: .16px; fill: #556; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.soil-banner { font-size: .35px; fill: #fff; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: .05px; pointer-events: none; }
+.soil-sub { font-size: .2px; fill: #fff; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: .03px; pointer-events: none; }
+.hint { font-size: .82rem; color: #666; margin: .45rem 0 0; }
+

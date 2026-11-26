@@ -1,0 +1,163 @@
+@{
+    var volLiters = Bed.ContainerVolumeLiters is > 0 ? Bed.ContainerVolumeLiters.Value : ContainerGuidance.DefaultVolumeLiters;
+    var volGallons = Math.Round(ContainerGuidance.ToGallons(volLiters), 1);
+    var activePlanting = Bed.Plantings.FirstOrDefault();
+    var activeInfo = activePlanting is null ? null : PlantResolver.Resolve(Session.Plants, activePlanting.PlantId, activePlanting.VarietyId);
+    var guidanceFor = ArmedPlant ?? activeInfo;
+    var rec = guidanceFor is null ? null : ContainerGuidance.Recommend(volLiters, guidanceFor.EffectiveSpacing);
+}
+
+<div class="container-controls">
+    <div class="row g-2 align-items-end">
+        <div class="col-6 col-sm-4">
+            <label class="form-label small mb-1">Container shape</label>
+            <select class="form-select form-select-sm" value="@Bed.ContainerShape"
+                    @onchange="e => Session.Mutate(_ => Bed.ContainerShape = Enum.Parse<ContainerShape>(e.Value!.ToString()!))">
+                <option value="@ContainerShape.Round">Round pot</option>
+                <option value="@ContainerShape.Rectangular">Planter box</option>
+                <option value="@ContainerShape.GrowBag">Grow bag</option>
+            </select>
+        </div>
+        <div class="col-6 col-sm-4">
+            <label class="form-label small mb-1">Size preset</label>
+            <select class="form-select form-select-sm" @onchange="OnPresetChanged">
+                <option value="">Choose preset…</option>
+                @foreach (var preset in ContainerGuidance.Presets)
+                {
+                    <option value="@preset.Liters" selected="@(Math.Abs(volLiters - preset.Liters) < 0.3)">@preset.Label</option>
+                }
+            </select>
+        </div>
+        <div class="col-12 col-sm-4">
+            <label class="form-label small mb-1">Volume (gal) · @Math.Round(volLiters, 1) L</label>
+            <input type="number" step="0.5" min="0.5" max="100" class="form-control form-control-sm"
+                   value="@volGallons"
+                   @onchange="e => OnGallonsChanged(ParseDouble(e, volGallons))" />
+        </div>
+    </div>
+
+    @if (rec is not null && guidanceFor is not null)
+    {
+        <div class="guidance mt-2 @(rec.IsTooSmall ? "too-small" : "ok")">
+            <strong>@guidanceFor.DisplayName:</strong> @rec.Summary
+        </div>
+    }
+</div>
+
+<div class="container-stage">
+    <svg class="container-svg" viewBox="0 0 10 10" @onclick="() => OnContainerClick(activePlanting, volLiters)">
+        @if (Bed.ContainerShape == ContainerShape.Round)
+        {
+            <circle cx="5" cy="5" r="4.4" class="pot-rim" />
+            <circle cx="5" cy="5" r="4.0" fill="@(ShowSoil ? SoilCatalog.ColorFor(Bed.Soil) : "#6d4c3d")" class="pot-soil" />
+        }
+        else if (Bed.ContainerShape == ContainerShape.GrowBag)
+        {
+            <circle cx="5" cy="5" r="4.4" class="bag-rim" />
+            <circle cx="5" cy="5" r="4.0" fill="@(ShowSoil ? SoilCatalog.ColorFor(Bed.Soil) : "#6d4c3d")" class="pot-soil" />
+        }
+        else
+        {
+            <rect x="0.8" y="1.4" width="8.4" height="7.2" rx="0.6" class="pot-rim" />
+            <rect x="1.2" y="1.8" width="7.6" height="6.4" rx="0.4" fill="@(ShowSoil ? SoilCatalog.ColorFor(Bed.Soil) : "#6d4c3d")" class="pot-soil" />
+        }
+
+        @if (ShowSoil)
+        {
+            <SvgText X="5" Y="4.8" Class="soil-banner">
+                @(string.IsNullOrEmpty(Bed.Soil) ? "Soil not set" : Bed.Soil)
+            </SvgText>
+            @if (!string.IsNullOrEmpty(Bed.Fertilizer))
+            {
+                <SvgText X="5" Y="5.8" Class="soil-sub">Fertilizer: @Bed.Fertilizer</SvgText>
+            }
+        }
+        else if (activePlanting is not null && activeInfo is not null)
+        {
+            var count = Math.Max(1, activePlanting.Count ?? 1);
+            var svgUrl = IconCatalog.ResolveSvgUrl(activeInfo.Icon, activePlanting.PlantId);
+            var (cols, rows) = PlantResolver.SubGrid(Math.Min(count, 16));
+            var area = 5.2;
+            var cellW = area / cols;
+            var cellH = area / rows;
+            var iconSz = Math.Min(cellW, cellH) * 0.78;
+            var drawn = Math.Min(count, 16);
+
+            @for (var i = 0; i < drawn; i++)
+            {
+                var c = i % cols;
+                var r = i / cols;
+                var ix = 2.4 + c * cellW + (cellW - iconSz) / 2.0;
+                var iy = 2.0 + r * cellH + (cellH - iconSz) / 2.0;
+                @if (svgUrl is not null)
+                {
+                    <image href="@svgUrl" x="@ix" y="@iy" width="@iconSz" height="@iconSz" pointer-events="none" />
+                }
+                else
+                {
+                    <SvgText X="@(ix + iconSz / 2.0)" Y="@(iy + iconSz / 2.0)" Class="pot-emoji">@activeInfo.Icon</SvgText>
+                }
+            }
+
+            <rect x="2.2" y="7.45" width="5.6" height="0.95" rx="0.3" class="pot-pill" />
+            <SvgText X="5" Y="7.95" Class="pot-label">@activeInfo.ShortName (×@count)</SvgText>
+        }
+        else
+        {
+            <SvgText X="5" Y="4.8" Class="pot-empty">
+                @(ArmedPlant is not null ? $"Tap to plant {ArmedPlant.ShortName}" : "Empty container")
+            </SvgText>
+            <SvgText X="5" Y="5.7" Class="pot-empty-sub">@volGallons gal · @Bed.ContainerShape</SvgText>
+        }
+    </svg>
+</div>
+
+<p class="hint">
+    Pick a plant or variety from the palette and tap the container to plant it. Tap a planted container to view details, adjust count, or remove.
+</p>
+
+@code {
+    [Parameter, EditorRequired] public Bed Bed { get; set; } = default!;
+    [Parameter, EditorRequired] public GardenSession Session { get; set; } = default!;
+    [Parameter] public bool ShowSoil { get; set; }
+    [Parameter] public ResolvedPlant? ArmedPlant { get; set; }
+    [Parameter] public EventCallback<string> OnOpenPlanting { get; set; }
+
+    private void OnPresetChanged(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), out var liters) && liters > 0)
+            Session.Mutate(_ => Bed.ContainerVolumeLiters = liters);
+    }
+
+    private void OnGallonsChanged(double gallons) =>
+        Session.Mutate(_ => Bed.ContainerVolumeLiters = ContainerGuidance.FromGallons(Math.Clamp(gallons, 0.5, 200)));
+
+    private async Task OnContainerClick(Planting? existing, double volLiters)
+    {
+        if (ShowSoil) return;
+        if (ArmedPlant is not null)
+        {
+            var plant = ArmedPlant;
+            var rec = ContainerGuidance.Recommend(volLiters, plant.EffectiveSpacing);
+            Session.Mutate(_ =>
+            {
+                Bed.Plantings.Clear();
+                Bed.Plantings.Add(new Planting
+                {
+                    PlantId = plant.PlantId,
+                    VarietyId = plant.VarietyId,
+                    X = 0,
+                    Y = 0,
+                    Count = Math.Max(1, rec.RecommendedPlants)
+                });
+            });
+            return;
+        }
+        if (existing is not null)
+            await OnOpenPlanting.InvokeAsync(existing.Id);
+    }
+
+    private static double ParseDouble(ChangeEventArgs e, double fallback) =>
+        double.TryParse(e.Value?.ToString(), out var v) && v > 0 ? v : fallback;
+}
+
