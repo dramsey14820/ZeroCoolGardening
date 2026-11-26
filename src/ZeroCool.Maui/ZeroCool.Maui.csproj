@@ -29,10 +29,10 @@
         <MauiXamlInflator>SourceGen</MauiXamlInflator>
 
         <!-- Display name -->
-        <ApplicationTitle>ZeroCool.Maui</ApplicationTitle>
+        <ApplicationTitle>ZeroCool Gardening</ApplicationTitle>
 
         <!-- App Identifier -->
-        <ApplicationId>com.companyname.zerocool.maui</ApplicationId>
+        <ApplicationId>com.zerocoolgardening.app</ApplicationId>
 
         <!-- Versions -->
         <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
