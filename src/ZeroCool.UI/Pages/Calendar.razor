@@ -1,0 +1,266 @@
+@page "/calendar"
+@implements IAsyncDisposable
+@inject PlanRepository PlanRepo
+@inject PlantCatalogRepository CatalogRepo
+@inject SettingsRepository SettingsRepo
+@inject IJSRuntime JS
+
+<PageTitle>Planting Calendar</PageTitle>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <h1 class="mb-0">Planting Calendar</h1>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+        <div class="btn-group btn-group-sm" role="group" aria-label="View">
+            <button class="btn @(_view == ViewMode.ByMonth ? "btn-success" : "btn-outline-success")" @onclick="() => _view = ViewMode.ByMonth">By Month</button>
+            <button class="btn @(_view == ViewMode.List ? "btn-success" : "btn-outline-success")" @onclick="() => _view = ViewMode.List">Schedule List</button>
+        </div>
+        <button class="btn btn-sm btn-outline-primary" @onclick="ExportIcsAsync" disabled="@(FilteredTasks.Count == 0)">
+            Export .ics
+        </button>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <p>Loading…</p>
+}
+else
+{
+    var (springFrost, fallFrost) = GrowingZoneCatalog.EffectiveFrostDates(_settings, _year);
+
+    <div class="frost-banner mb-3">
+        <div>
+            <strong>@( _settings.UsdaZone is int z ? $"USDA Zone {z}" : "USDA Zone not set (using default Apr 15 frost)" )</strong>
+            · Last spring frost: <strong>@(springFrost?.ToString("MMM d, yyyy") ?? "Frost-free")</strong>
+            · First fall frost: <strong>@(fallFrost?.ToString("MMM d, yyyy") ?? "Frost-free")</strong>
+        </div>
+        <a href="settings" class="btn btn-xs btn-outline-secondary">Change zone / frost dates</a>
+    </div>
+
+    <div class="row g-2 mb-3 align-items-end">
+        <div class="col-6 col-md-2">
+            <label class="form-label small mb-1">Year</label>
+            <input type="number" class="form-control form-control-sm" min="2020" max="2040"
+                   value="@_year" @onchange="OnYearChanged" />
+        </div>
+        <div class="col-6 col-md-4">
+            <label class="form-label small mb-1">Garden plan</label>
+            <select class="form-select form-select-sm" @bind="_selectedPlanId">
+                <option value="">All garden plans (@_plans.Count)</option>
+                @foreach (var p in _plans)
+                {
+                    <option value="@p.Id">@p.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-12 col-md-6">
+            <label class="form-label small mb-1">Filter events</label>
+            <div class="d-flex flex-wrap gap-1">
+                <button class="btn btn-xs @(_eventFilter is null ? "btn-dark" : "btn-outline-secondary")" @onclick="() => _eventFilter = null">All</button>
+                @foreach (var ev in Enum.GetValues<CalendarEventType>())
+                {
+                    var e = ev;
+                    <button class="btn btn-xs @(_eventFilter == e ? EventBtnClass(e) : "btn-outline-secondary")" @onclick="() => _eventFilter = e">
+                        @PlantingCalendarEngine.FormatEvent(e)
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (FilteredTasks.Count == 0)
+    {
+        <div class="card p-4 text-center text-muted">
+            <p class="mb-2">No planting tasks scheduled yet.</p>
+            <p class="small mb-0">Open a <a href="plans">garden plan</a>, add a bed, and plant a few varieties to see your personalized planting calendar.</p>
+        </div>
+    }
+    else if (_view == ViewMode.ByMonth)
+    {
+        var byMonth = FilteredTasks
+            .GroupBy(t => new DateOnly((t.ActualDate ?? t.StartDate).Year, (t.ActualDate ?? t.StartDate).Month, 1))
+            .OrderBy(g => g.Key);
+
+        <div class="month-grid">
+            @foreach (var group in byMonth)
+            {
+                <div class="month-card">
+                    <div class="month-head">
+                        <span>@group.Key.ToString("MMMM yyyy")</span>
+                        <span class="badge bg-light text-dark">@group.Count()</span>
+                    </div>
+                    <div class="month-body">
+                        @foreach (var task in group)
+                        {
+                            var t = task;
+                            <div class="task-row">
+                                <PlantIcon Icon="@t.Icon" FallbackKey="@t.PlantId" Alt="@t.DisplayName" Size="24" />
+                                <div class="task-info">
+                                    <div class="d-flex flex-wrap align-items-center gap-1">
+                                        <span class="badge @EventBadgeClass(t.EventType)">@PlantingCalendarEngine.FormatEvent(t.EventType)</span>
+                                        <strong>@t.DisplayName</strong>
+                                    </div>
+                                    <div class="small text-muted">
+                                        @FormatRange(t.StartDate, t.EndDate) ·
+                                        <a href="plan/@t.PlanId/bed/@t.BedId">@t.PlanName / @t.BedName</a>
+                                        @if (!string.IsNullOrEmpty(t.Notes))
+                                        {
+                                            <span> · @t.Notes</span>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="actual-wrap">
+                                    <label class="small text-muted d-block">Actual</label>
+                                    <input type="date" class="form-control form-control-sm"
+                                           value="@(t.ActualDate?.ToString("yyyy-MM-dd") ?? "")"
+                                           @onchange="e => RecordActualDateAsync(t, e)" />
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Window</th>
+                        <th>Task</th>
+                        <th>Plant / Variety</th>
+                        <th>Garden / Bed</th>
+                        <th>Actual date</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var task in FilteredTasks)
+                    {
+                        var t = task;
+                        <tr>
+                            <td class="text-nowrap small">@FormatRange(t.StartDate, t.EndDate)</td>
+                            <td><span class="badge @EventBadgeClass(t.EventType)">@PlantingCalendarEngine.FormatEvent(t.EventType)</span></td>
+                            <td>
+                                <PlantIcon Icon="@t.Icon" FallbackKey="@t.PlantId" Alt="@t.DisplayName" Size="20" />
+                                <span class="ms-1">@t.DisplayName</span>
+                            </td>
+                            <td class="small"><a href="plan/@t.PlanId/bed/@t.BedId">@t.PlanName / @t.BedName</a></td>
+                            <td style="max-width: 150px;">
+                                <input type="date" class="form-control form-control-sm"
+                                       value="@(t.ActualDate?.ToString("yyyy-MM-dd") ?? "")"
+                                       @onchange="e => RecordActualDateAsync(t, e)" />
+                            </td>
+                            <td class="text-end">
+                                <a class="btn btn-xs btn-outline-secondary" href="plants/@t.PlantId">Rules</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@code {
+    private enum ViewMode { ByMonth, List }
+
+    private bool _loading = true;
+    private ViewMode _view = ViewMode.ByMonth;
+    private int _year = DateTime.Today.Year;
+    private string _selectedPlanId = "";
+    private CalendarEventType? _eventFilter;
+
+    private List<GardenPlan> _plans = [];
+    private IReadOnlyList<Plant> _catalog = [];
+    private AppSettings _settings = new();
+    private IReadOnlyList<CalendarTask> _allTasks = [];
+    private IJSObjectReference? _filesModule;
+
+    private List<CalendarTask> FilteredTasks => _allTasks
+        .Where(t => (string.IsNullOrEmpty(_selectedPlanId) || t.PlanId == _selectedPlanId) &&
+                    (_eventFilter is null || t.EventType == _eventFilter))
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _plans = (await PlanRepo.ListAsync(templates: false)).ToList();
+        _catalog = await CatalogRepo.GetAllAsync();
+        _settings = await SettingsRepo.LoadAsync();
+        RebuildSchedule();
+        _loading = false;
+    }
+
+    private void RebuildSchedule() =>
+        _allTasks = PlantingCalendarEngine.BuildSchedule(_plans, _catalog, _settings, _year);
+
+    private void OnYearChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var y) && y is >= 2020 and <= 2040)
+        {
+            _year = y;
+            RebuildSchedule();
+        }
+    }
+
+    private async Task RecordActualDateAsync(CalendarTask task, ChangeEventArgs e)
+    {
+        var plan = _plans.FirstOrDefault(p => p.Id == task.PlanId);
+        var bed = plan?.Beds.FirstOrDefault(b => b.Id == task.BedId);
+        var planting = bed?.Plantings.FirstOrDefault(pl => pl.Id == task.PlantingId);
+        if (plan is null || planting is null) return;
+
+        DateOnly? parsed = DateOnly.TryParse(e.Value?.ToString(), out var d) ? d : null;
+        switch (task.EventType)
+        {
+            case CalendarEventType.Transplant:
+                planting.TransplantedOn = parsed;
+                break;
+            case CalendarEventType.Harvest:
+                planting.HarvestedOn = parsed;
+                break;
+            default:
+                planting.PlantedOn = parsed;
+                break;
+        }
+
+        await PlanRepo.SaveAsync(plan);
+        RebuildSchedule();
+    }
+
+    private async Task ExportIcsAsync()
+    {
+        var ics = PlantingCalendarEngine.ExportIcs(FilteredTasks, $"ZeroCool Gardening {_year}");
+        _filesModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/ZeroCool.UI/files.js");
+        await _filesModule.InvokeVoidAsync("downloadText", $"zerocool-garden-calendar-{_year}.ics", ics, "text/calendar");
+    }
+
+    private static string FormatRange(DateOnly s, DateOnly e) =>
+        s == e ? s.ToString("MMM d") : $"{s:MMM d} – {e:MMM d}";
+
+    private static string EventBadgeClass(CalendarEventType ev) => ev switch
+    {
+        CalendarEventType.StartIndoors => "ev-indoors",
+        CalendarEventType.DirectSow => "ev-sow",
+        CalendarEventType.Transplant => "ev-transplant",
+        CalendarEventType.Harvest => "ev-harvest",
+        _ => "bg-secondary"
+    };
+
+    private static string EventBtnClass(CalendarEventType ev) => ev switch
+    {
+        CalendarEventType.StartIndoors => "btn-primary",
+        CalendarEventType.DirectSow => "btn-info text-dark",
+        CalendarEventType.Transplant => "btn-success",
+        CalendarEventType.Harvest => "btn-warning text-dark",
+        _ => "btn-secondary"
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_filesModule is not null) { try { await _filesModule.DisposeAsync(); } catch { } }
+    }
+}
+
